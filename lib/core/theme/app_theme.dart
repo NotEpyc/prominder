@@ -5,6 +5,8 @@ class AppTheme {
   static const Color primaryColor = Color(0xFF3A5A40);
   // Secondary: Moss
   static const Color secondaryColor = Color(0xFF588157);
+  //Teritary:
+  static const Color teritaryColor = Color(0xFF81B622);
   // Accent: Soft Gold
   static const Color accentColor = Color(0xFFD4A373);
   // Highlight: Dusty Rose
@@ -27,7 +29,7 @@ class AppTheme {
       colorScheme: const ColorScheme.light(
         primary: primaryColor,
         secondary: secondaryColor,
-        tertiary: accentColor,
+        tertiary: teritaryColor,
         error: highlightColor,
         surface: Colors.white,
       ),

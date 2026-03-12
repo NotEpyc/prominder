@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/neumorphic_button.dart';
 import '../../widgets/neumorphic_text_field.dart';
+import '../../widgets/global_loader.dart';
 import 'mobile_home_screen.dart';
 import 'mobile_login_screen.dart';
 import '../../widgets/neumorphic_alert.dart';
@@ -195,9 +196,12 @@ class _MobileRegisterScreenState extends State<MobileRegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
-      body: AnimatedOpacity(
-        opacity: _isVideoInitialized ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 500),
+      body: Stack(
+        children: [
+          if (!_isVideoInitialized) const GlobalLoader(),
+          AnimatedOpacity(
+            opacity: _isVideoInitialized ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 500),
         child: Stack(
           children: [
             // Background Video Layer
@@ -451,6 +455,8 @@ class _MobileRegisterScreenState extends State<MobileRegisterScreen> {
             ),
           ],
         ),
+      ),
+        ],
       ),
     );
   }

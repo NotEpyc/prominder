@@ -9,6 +9,7 @@ import '../../widgets/neumorphic_button.dart';
 import 'mobile_home_screen.dart';
 import 'mobile_login_screen.dart';
 import 'mobile_register_screen.dart';
+import '../../widgets/global_loader.dart';
 
 class MobileLandingScreen extends StatefulWidget {
   const MobileLandingScreen({super.key});
@@ -106,8 +107,11 @@ class _MobileLandingScreenState extends State<MobileLandingScreen> {
     return Scaffold(
       backgroundColor:
           AppTheme.backgroundColor, // Updated to Neumorphic background
-      body: AnimatedOpacity(
-        opacity: _isVideoInitialized ? 1.0 : 0.0,
+      body: Stack(
+        children: [
+          if (!_isVideoInitialized) const GlobalLoader(),
+          AnimatedOpacity(
+            opacity: _isVideoInitialized ? 1.0 : 0.0,
         duration: const Duration(milliseconds: 500),
         child: SafeArea(
           child: Center(
@@ -222,7 +226,9 @@ class _MobileLandingScreenState extends State<MobileLandingScreen> {
           ),
         ),
       ),
-    );
+      ],
+    ),
+  );
   }
 }
 
