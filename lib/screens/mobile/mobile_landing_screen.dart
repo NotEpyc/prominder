@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/neumorphic_button.dart';
+import 'mobile_home_screen.dart';
 import 'mobile_login_screen.dart';
 import 'mobile_register_screen.dart';
 
@@ -16,13 +18,15 @@ class MobileLandingScreen extends StatefulWidget {
 }
 
 class _MobileLandingScreenState extends State<MobileLandingScreen> {
-  late VideoPlayerController _videoController;
+  VideoPlayerController? _videoController;
   bool _isVideoInitialized = false;
 
   @override
   void initState() {
     super.initState();
     _initializeVideo();
+    // Landing screen always shows on launch.
+    // Token check only happens when user taps "Get Started".
   }
 
   Future<void> _initializeVideo() async {
@@ -47,9 +51,9 @@ class _MobileLandingScreenState extends State<MobileLandingScreen> {
       // Initialize player with the cached local file
       _videoController = VideoPlayerController.file(file);
 
-      await _videoController.initialize();
-      await _videoController.setLooping(true);
-      await _videoController.play();
+      await _videoController!.initialize();
+      await _videoController!.setLooping(true);
+      await _videoController!.play();
 
       if (mounted) {
         setState(() {
@@ -68,14 +72,23 @@ class _MobileLandingScreenState extends State<MobileLandingScreen> {
 
   @override
   void dispose() {
-    _videoController.dispose();
+    _videoController?.dispose();
     super.dispose();
   }
 
-  void _navigateToLogin() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const MobileLoginScreen()),
-    );
+  void _navigateToGetStarted() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token');
+    if (!mounted) return;
+    if (token != null && token.isNotEmpty) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const MobileHomeScreen()),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const MobileLoginScreen()),
+      );
+    }
   }
 
   void _navigateToRegister() {
@@ -112,9 +125,9 @@ class _MobileLandingScreenState extends State<MobileLandingScreen> {
                             ? FittedBox(
                               fit: BoxFit.cover,
                               child: SizedBox(
-                                width: _videoController.value.size.width,
-                                height: _videoController.value.size.height,
-                                child: VideoPlayer(_videoController),
+                                width: _videoController!.value.size.width,
+                                height: _videoController!.value.size.height,
+                                child: VideoPlayer(_videoController!),
                               ),
                             )
                             : Container(
@@ -174,7 +187,7 @@ class _MobileLandingScreenState extends State<MobileLandingScreen> {
                           SizedBox(
                             width: double.infinity,
                             child: NeumorphicButton(
-                              onPressed: _navigateToLogin,
+                              onPressed: _navigateToGetStarted,
                               child: const Text(
                                 'Get Started',
                                 style: TextStyle(

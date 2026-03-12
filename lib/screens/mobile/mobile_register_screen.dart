@@ -5,12 +5,15 @@ import 'package:video_player/video_player.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/neumorphic_button.dart';
 import '../../widgets/neumorphic_text_field.dart';
+import 'mobile_home_screen.dart';
 import 'mobile_login_screen.dart';
+import '../../widgets/neumorphic_alert.dart';
 
 class MobileRegisterScreen extends StatefulWidget {
   const MobileRegisterScreen({super.key});
@@ -28,7 +31,7 @@ class _MobileRegisterScreenState extends State<MobileRegisterScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
-  late VideoPlayerController _videoController;
+  VideoPlayerController? _videoController;
   bool _isVideoInitialized = false;
 
   @override
@@ -55,9 +58,9 @@ class _MobileRegisterScreenState extends State<MobileRegisterScreen> {
       }
 
       _videoController = VideoPlayerController.file(file);
-      await _videoController.initialize();
-      await _videoController.setLooping(true);
-      await _videoController.play();
+      await _videoController!.initialize();
+      await _videoController!.setLooping(true);
+      await _videoController!.play();
 
       if (mounted) {
         setState(() {
@@ -79,28 +82,30 @@ class _MobileRegisterScreenState extends State<MobileRegisterScreen> {
     _lastNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _videoController.dispose();
+    _videoController?.dispose();
     super.dispose();
   }
 
   Future<void> _handleRegister() async {
-    if (!_agreeToTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please agree to terms and conditions.')),
-      );
-      return;
-    }
-
     final firstName = _firstNameController.text.trim();
     final lastName = _lastNameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
     if (firstName.isEmpty || lastName.isEmpty || email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please fill out all fields.'),
-        ),
+      showNeumorphicAlert(
+        context,
+        title: 'Empty Fields',
+        message: 'Please fill out all fields to create your account.',
+      );
+      return;
+    }
+
+    if (!_agreeToTerms) {
+      showNeumorphicAlert(
+        context,
+        title: 'Terms Required',
+        message: 'Please agree to the terms and conditions before signing up.',
       );
       return;
     }
@@ -124,34 +129,57 @@ class _MobileRegisterScreenState extends State<MobileRegisterScreen> {
           'first_name': firstName,
           'last_name': lastName,
         }),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception('Connection timed out. Check your internet connection.'),
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
+        // Register endpoint only returns user info (no tokens).
+        // Auto-login with the same credentials to get tokens.
+        final tokenResponse = await http.post(
+          Uri.parse('$baseUrl/api/auth/token/'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': email, 'password': password}),
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => throw Exception('Login after register timed out.'),
+        );
+
+        if (tokenResponse.statusCode == 200) {
+          final tokenData = jsonDecode(tokenResponse.body);
+          final prefs = await SharedPreferences.getInstance();
+          if (tokenData['access'] != null) {
+            await prefs.setString('access_token', tokenData['access']);
+          }
+          if (tokenData['refresh'] != null) {
+            await prefs.setString('refresh_token', tokenData['refresh']);
+          }
+        }
+
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Registration successful! Please log in.'),
-            ),
-          );
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const MobileLoginScreen()),
+            MaterialPageRoute(builder: (_) => const MobileHomeScreen()),
           );
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Registration failed: ${response.statusCode}\n${response.body}',
-              ),
-            ),
+          showNeumorphicAlert(
+            context,
+            title: 'Registration Failed',
+            message: 'This email may already be in use, or your details are invalid. Please try again.',
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+        final message = e.toString().contains('SocketException') || e.toString().contains('Failed host lookup')
+            ? 'Could not reach the server. Please check your internet connection.'
+            : 'Something went wrong. Please try again.';
+        showNeumorphicAlert(
+          context,
+          title: 'Connection Error',
+          message: message,
         );
       }
     } finally {
@@ -179,9 +207,9 @@ class _MobileRegisterScreenState extends State<MobileRegisterScreen> {
                       ? FittedBox(
                         fit: BoxFit.fill,
                         child: SizedBox(
-                          width: _videoController.value.size.width,
-                          height: _videoController.value.size.height,
-                          child: VideoPlayer(_videoController),
+                          width: _videoController!.value.size.width,
+                          height: _videoController!.value.size.height,
+                          child: VideoPlayer(_videoController!),
                         ),
                       )
                       : Container(color: AppTheme.backgroundColor),

@@ -13,6 +13,7 @@ import '../../widgets/neumorphic_button.dart';
 import '../../widgets/neumorphic_text_field.dart';
 import 'mobile_home_screen.dart';
 import 'mobile_register_screen.dart';
+import '../../widgets/neumorphic_alert.dart';
 
 class MobileLoginScreen extends StatefulWidget {
   const MobileLoginScreen({super.key});
@@ -28,7 +29,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
-  late VideoPlayerController _videoController;
+  VideoPlayerController? _videoController;
   bool _isVideoInitialized = false;
 
   @override
@@ -55,9 +56,9 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
       }
 
       _videoController = VideoPlayerController.file(file);
-      await _videoController.initialize();
-      await _videoController.setLooping(true);
-      await _videoController.play();
+      await _videoController!.initialize();
+      await _videoController!.setLooping(true);
+      await _videoController!.play();
 
       if (mounted) {
         setState(() {
@@ -77,26 +78,28 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-    _videoController.dispose();
+    _videoController?.dispose();
     super.dispose();
   }
 
   Future<void> _handleLogin() async {
-    if (!_agreeToTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please agree to terms and conditions.')),
-      );
-      return;
-    }
-
     final username = _emailController.text.trim();
     final password = _passwordController.text;
 
     if (username.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter both email/username and password.'),
-        ),
+      showNeumorphicAlert(
+        context,
+        title: 'Empty Fields',
+        message: 'Please enter both your email/username and password.',
+      );
+      return;
+    }
+
+    if (!_agreeToTerms) {
+      showNeumorphicAlert(
+        context,
+        title: 'Terms Required',
+        message: 'Please agree to the terms and conditions before signing in.',
       );
       return;
     }
@@ -115,6 +118,9 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
         Uri.parse('$baseUrl/api/auth/token/'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': username, 'password': password}),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception('Connection timed out. Check your internet connection.'),
       );
 
       if (response.statusCode == 200) {
@@ -134,20 +140,23 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Login failed: ${response.statusCode}\n${response.body}',
-              ),
-            ),
+          showNeumorphicAlert(
+            context,
+            title: 'Sign In Failed',
+            message: 'Incorrect email or password. Please try again.',
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
+        final message = e.toString().contains('SocketException') || e.toString().contains('Failed host lookup')
+            ? 'Could not reach the server. Please check your internet connection.'
+            : 'Something went wrong. Please try again.';
+        showNeumorphicAlert(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+          title: 'Connection Error',
+          message: message,
+        );
       }
     } finally {
       if (mounted) {
@@ -174,9 +183,9 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
                       ? FittedBox(
                         fit: BoxFit.fill,
                         child: SizedBox(
-                          width: _videoController.value.size.width,
-                          height: _videoController.value.size.height,
-                          child: VideoPlayer(_videoController),
+                          width: _videoController!.value.size.width,
+                          height: _videoController!.value.size.height,
+                          child: VideoPlayer(_videoController!),
                         ),
                       )
                       : Container(color: AppTheme.backgroundColor),
