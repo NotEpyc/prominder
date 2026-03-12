@@ -9,10 +9,16 @@ class AppTheme {
   static const Color accentColor = Color(0xFFD4A373);
   // Highlight: Dusty Rose
   static const Color highlightColor = Color(0xFFB56576);
-  // Background: Light Linen
-  static const Color backgroundColor = Color(0xFFFAF7F2);
+  // Background: Light Linen (Darkened for Neumorphism)
+  static const Color backgroundColor = Color(0xFFEBEBDD);
   // Text: Deep Mocha
-  static const Color textColor = Color(0xFF3A2F2F);
+  static const Color buttonHighlightColor = Color(0xFFFFFFED);
+  // Text: Deep Mocha
+  static const Color buttonTextColor = Color(0xFF2F3E2E);
+  // Text: Deep Mocha
+  static const Color textColor = Color(0xFF2F3E2E);
+  // Text: Deep Mocha
+  static const Color descriptionTextColor = Color(0xFF5A6658);
 
   static ThemeData get lightTheme {
     return ThemeData(

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
-import 'screens/mobile/mobile_home_screen.dart';
+import 'screens/mobile/mobile_landing_screen.dart';
 import 'screens/wearos/wearos_home_screen.dart';
 
-void main() {
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+Future<void> main() async {
+  await dotenv.load(fileName: ".env");
   runApp(const ProminderApp());
 }
 
@@ -32,7 +35,7 @@ class ResponsiveScreenLayer extends StatelessWidget {
     if (screenWidth < 300) {
       return const WearOsHomeScreen(); // Render the minimal watch UI
     } else {
-      return const MobileHomeScreen(); // Render the full mobile UI
+      return const MobileLandingScreen(); // Render the full mobile UI
     }
   }
 }
