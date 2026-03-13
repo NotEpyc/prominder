@@ -10,6 +10,7 @@ class AppTheme {
   // Accent: Soft Gold
   static const Color accentColor = Color(0xFFD4A373);
   // Highlight: Dusty Rose
+  static const Color lightGreen = Color(0xFF9EAF9C);
   static const Color highlightColor = Color(0xFFB56576);
   // Background: Light Linen (Darkened for Neumorphism)
   static const Color backgroundColor = Color(0xFFEBEBDD);
