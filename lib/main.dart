@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'core/theme/app_theme.dart';
 import 'screens/mobile/mobile_landing_screen.dart';
 import 'screens/wearos/wearos_home_screen.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Lock entire app to portrait mode
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
   await dotenv.load(fileName: ".env");
   runApp(const ProminderApp());
 }

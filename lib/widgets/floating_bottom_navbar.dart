@@ -26,7 +26,7 @@ class _FloatingBottomNavbarState extends State<FloatingBottomNavbar>
 
   final List<NavItem> _navItems = [
     NavItem(icon: Icons.home_rounded, index: 0),
-    NavItem(icon: Icons.smart_toy_rounded, index: 1),
+    NavItem(icon: Icons.bubble_chart_rounded, index: 1),
     NavItem(icon: Icons.style_rounded, index: 2),
     NavItem(icon: Icons.person_rounded, index: 3),
   ];

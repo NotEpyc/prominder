@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/parallax_background.dart';
 import '../../widgets/floating_bottom_navbar.dart';
+import '../../widgets/global_loader.dart';
+import 'dashboard_content.dart';
+import 'mobile_chatbot_screen.dart';
 
 class MobileHomeScreen extends StatefulWidget {
   const MobileHomeScreen({super.key});
@@ -11,68 +14,310 @@ class MobileHomeScreen extends StatefulWidget {
 }
 
 class _MobileHomeScreenState extends State<MobileHomeScreen> {
+  // Scroll
   final ScrollController _scrollController = ScrollController();
   double _scrollOffset = 0;
   int _currentNavIndex = 0;
+
+  // Search — owned here so the search bar can live above the overlay in the Stack
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  bool _searchActive = false;
+  bool _hasText = false;
+  
+  String? _pendingPrompt;
+  bool _isScreenLoading = true;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(() {
-      setState(() {
-        _scrollOffset = _scrollController.offset;
-      });
+      setState(() => _scrollOffset = _scrollController.offset);
     });
+    _searchFocusNode.addListener(_onFocusChanged);
+    _searchController.addListener(() {
+      setState(() => _hasText = _searchController.text.trim().isNotEmpty);
+    });
+    _simulateLoading();
+  }
+
+  Future<void> _simulateLoading() async {
+    // Artificial delay to simulate fetching user data, agenda tasks before rendering the dashboard
+    await Future.delayed(const Duration(milliseconds: 1200));
+    if (mounted) {
+      setState(() => _isScreenLoading = false);
+    }
+  }
+
+  void _onFocusChanged() {
+    setState(() => _searchActive = _searchFocusNode.hasFocus);
+  }
+
+  void _dismissSearch() {
+    _searchController.clear();
+    _searchFocusNode.unfocus();
+  }
+
+  void _onSearchSubmitted(String val) {
+    if (val.trim().isNotEmpty) {
+      setState(() {
+        _pendingPrompt = val.trim();
+        _currentNavIndex = 1;
+      });
+      _searchController.clear();
+      _searchFocusNode.unfocus();
+    }
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchFocusNode.removeListener(_onFocusChanged);
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
-    
-    // Extra space added to the top and rendered above the screen.
-    // This allows the user to see the "top part" of the image when they 
-    // overscroll (pull down) the list.
     final overscrollAllowance = screenHeight * 0.15;
+    final statusBarHeight = MediaQuery.of(context).padding.top;
+
+    if (_currentNavIndex != 0) {
+      return MobileChatbotScreen(
+        initialNavIndex: _currentNavIndex,
+        initialPrompt: _currentNavIndex == 1 ? _pendingPrompt : null,
+        onNavTap: (index) {
+          if (index == 0) _pendingPrompt = null;
+          setState(() => _currentNavIndex = index);
+        },
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          // The responsive parallax mirrored background
+          // ── Layer 0: Parallax background ──────────────────────────────────
           ParallaxBackground(
             scrollOffset: _scrollOffset,
             overscrollAllowance: overscrollAllowance,
             screenHeight: screenHeight,
           ),
 
-          // Content area (empty for now per request to remove bento cards)
-          Positioned.fill(
-            child: ListView(
-              controller: _scrollController,
-              physics: const BouncingScrollPhysics(),
-              children: [
-                SizedBox(height: screenHeight * 1.5), // So the parallax is still scrollable
-              ],
+          if (_isScreenLoading)
+            const GlobalLoader()
+          else ...[
+            // ── Layer 1: Scrollable content (locked while search is active) ───
+            Positioned.fill(
+              child: ListView(
+                controller: _scrollController,
+                physics: _searchActive
+                    ? const NeverScrollableScrollPhysics()
+                    : const BouncingScrollPhysics(),
+                children: [
+                  DashboardContent(
+                    searchActive: _searchActive,
+                    onDismissSearch: _dismissSearch,
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          // Floating Neumorphic Bottom Navbar
-          FloatingBottomNavbar(
-            currentIndex: _currentNavIndex,
-            onTap: (index) {
-              setState(() {
-                _currentNavIndex = index;
-              });
-            },
-          ),
+            // ── Layer 2: Floating navbar ──────────────────────────────────────
+            FloatingBottomNavbar(
+              currentIndex: _currentNavIndex,
+              onTap: (index) => setState(() => _currentNavIndex = index),
+            ),
+
+            // ── Layer 3: Full-screen dim overlay (covers navbar too) ──────────
+            if (_searchActive)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _dismissSearch,
+                  child: ColoredBox(
+                    color: Colors.black.withValues(alpha: 0.50),
+                  ),
+                ),
+              ),
+
+            // ── Layer 4: Search bar — always above everything ─────────────────
+            Positioned(
+              top: statusBarHeight + 12,
+              left: 24,
+              right: 24,
+              child: _buildSearchBar(),
+            ),
+          ],
         ],
       ),
     );
   }
+
+  Widget _buildSearchBar() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundColor,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: CustomPaint(
+        painter: _SearchBarInnerShadowPainter(
+          borderRadius: 24,
+          shadows: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: _searchActive ? 0.30 : 0.22),
+              offset: const Offset(4, 4),
+              blurRadius: 8,
+              spreadRadius: -1,
+            ),
+            BoxShadow(
+              color: AppTheme.buttonHighlightColor
+                  .withValues(alpha: _searchActive ? 1.0 : 0.85),
+              offset: const Offset(-4, -4),
+              blurRadius: 8,
+              spreadRadius: -1,
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 14.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  focusNode: _searchFocusNode,
+                  onSubmitted: _onSearchSubmitted,
+                  minLines: 1,
+                  maxLines: 5,
+                  style: const TextStyle(
+                    color: AppTheme.textColor,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 15,
+                    height: 1.4,
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: 'Ask anything...',
+                    hintStyle: TextStyle(
+                      color: AppTheme.descriptionTextColor,
+                      fontWeight: FontWeight.normal,
+                      fontSize: 15,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ),
+              if (_hasText) ...[
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () => _onSearchSubmitted(_searchController.text),
+                  child: const SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: CustomPaint(
+                      painter: _NeumorphicArrowPainter(),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Painters (moved here from DashboardContent since the search bar moved) ───
+
+class _SearchBarInnerShadowPainter extends CustomPainter {
+  final double borderRadius;
+  final List<BoxShadow> shadows;
+
+  _SearchBarInnerShadowPainter({
+    required this.borderRadius,
+    required this.shadows,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final boundsPath = Path()
+      ..addRRect(RRect.fromRectAndRadius(rect, Radius.circular(borderRadius)));
+    canvas.clipPath(boundsPath);
+
+    for (var shadow in shadows) {
+      final shadowPaint = Paint()
+        ..color = shadow.color
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, shadow.blurRadius);
+
+      final holeRect = rect.shift(shadow.offset).inflate(shadow.spreadRadius);
+      final shadowPath = Path()..addRect(rect.inflate(shadow.blurRadius * 5));
+      shadowPath.addRRect(
+        RRect.fromRectAndRadius(holeRect, Radius.circular(borderRadius)),
+      );
+      canvas.drawPath(shadowPath..fillType = PathFillType.evenOdd, shadowPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SearchBarInnerShadowPainter oldDelegate) =>
+      oldDelegate.borderRadius != borderRadius ||
+      oldDelegate.shadows != shadows;
+}
+
+class _NeumorphicArrowPainter extends CustomPainter {
+  const _NeumorphicArrowPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final arrowW = size.width * 0.22;
+    final arrowH = size.height * 0.26;
+    const strokeW = 3.0;
+
+    final darkPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.28)
+      ..strokeWidth = strokeW
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2);
+    _drawChevron(canvas, cx + 1.5, cy + 1.5, arrowW, arrowH, darkPaint);
+
+    final lightPaint = Paint()
+      ..color = AppTheme.buttonHighlightColor.withValues(alpha: 0.75)
+      ..strokeWidth = strokeW
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2);
+    _drawChevron(canvas, cx - 1.5, cy - 1.5, arrowW, arrowH, lightPaint);
+
+    final mainPaint = Paint()
+      ..color = AppTheme.primaryColor
+      ..strokeWidth = strokeW
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    _drawChevron(canvas, cx, cy, arrowW, arrowH, mainPaint);
+  }
+
+  void _drawChevron(
+      Canvas canvas, double cx, double cy, double w, double h, Paint paint) {
+    final path = Path();
+    path.moveTo(cx - w, cy - h);
+    path.lineTo(cx + w, cy);
+    path.lineTo(cx - w, cy + h);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

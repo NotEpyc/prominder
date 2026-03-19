@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path_provider/path_provider.dart';
@@ -120,8 +121,8 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': username, 'password': password}),
       ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw Exception('Connection timed out. Check your internet connection.'),
+        const Duration(seconds: 30),
+        onTimeout: () => throw TimeoutException('Connection timed out. The server may be waking up — please try again.'),
       );
 
       if (response.statusCode == 200) {
@@ -150,9 +151,14 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        final message = e.toString().contains('SocketException') || e.toString().contains('Failed host lookup')
-            ? 'Could not reach the server. Please check your internet connection.'
-            : 'Something went wrong. Please try again.';
+        final String message;
+        if (e is TimeoutException) {
+          message = 'The server took too long to respond. It may be waking up — please try again in a moment.';
+        } else if (e is SocketException || e.toString().contains('Failed host lookup')) {
+          message = 'Could not reach the server. Please check your internet connection.';
+        } else {
+          message = 'Something went wrong. Please try again.\n\nDebug: ${e.toString()}';
+        }
         showNeumorphicAlert(
           context,
           title: 'Connection Error',
