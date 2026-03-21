@@ -1,4 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_spinkit/flutter_spinkit.dart';
@@ -27,12 +31,12 @@ class MobileChatbotScreen extends StatefulWidget {
 class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
   // Scroll
   final ScrollController _scrollController = ScrollController();
-  double _scrollOffset = 0;
 
   // Input
   final TextEditingController _inputController = TextEditingController();
   final FocusNode _inputFocusNode = FocusNode();
   bool _hasText = false;
+  File? _stagedFile;
 
   // STT
   final stt.SpeechToText _speech = stt.SpeechToText();
@@ -41,20 +45,22 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
 
   // Conversation state
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  int? _conversationId;          // null = new thread, set after first reply
+  int? _conversationId; // null = new thread, set after first reply
   String? _conversationTitle;
-  bool _isBotTyping = false;     // shows typing indicator
+  bool _isBotTyping = false; // shows typing indicator
   List<ConversationSummary> _history = [];
   bool _isLoadingHistory = false;
   bool _isLoadingMessages = false;
   bool _isFirstLoad = true;
   String _sidebarSearchQuery = '';
-  final TextEditingController _sidebarSearchController = TextEditingController();
+  final TextEditingController _sidebarSearchController =
+      TextEditingController();
 
   final List<_ChatMessage> _messages = [
     _ChatMessage(
-      text: 'Hi! I\'m your AI study assistant. Ask me anything about '
-            'your schedule, subjects, or study tips.',
+      text:
+          'Hi! I\'m your AI study assistant. Ask me anything about '
+          'your schedule, subjects, or study tips.',
       isUser: false,
     ),
   ];
@@ -62,20 +68,17 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(() {
-      setState(() => _scrollOffset = _scrollController.offset);
-    });
     _inputController.addListener(() {
-      setState(() => _hasText = _inputController.text.trim().isNotEmpty);
+      setState(() => _hasText = _inputController.text.trim().isNotEmpty || _stagedFile != null);
     });
-    
+
     if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
       _inputController.text = widget.initialPrompt!;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _sendMessage();
       });
     }
-    
+
     _initSpeech();
     _startInitialLoad();
   }
@@ -98,6 +101,7 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
   }
 
   Future<void> _openConversation(ConversationSummary summary) async {
+    FocusScope.of(context).unfocus();
     // Close drawer
     Navigator.of(context).pop();
 
@@ -123,12 +127,19 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
       if (!mounted) return;
       setState(() {
         _isLoadingMessages = false;
-        _messages.add(_ChatMessage(text: 'Could not load messages', isUser: false, isError: true));
+        _messages.add(
+          _ChatMessage(
+            text: 'Could not load messages',
+            isUser: false,
+            isError: true,
+          ),
+        );
       });
     }
   }
 
   void _startNewConversation({bool fromDrawer = true}) {
+    FocusScope.of(context).unfocus();
     if (fromDrawer) Navigator.of(context).pop(); // Close drawer
     setState(() {
       _conversationId = null;
@@ -136,8 +147,9 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
       _messages.clear();
       _messages.add(
         _ChatMessage(
-          text: 'Hi! I\'m your AI study assistant. Ask me anything about '
-                'your schedule, subjects, or study tips.',
+          text:
+              'Hi! I\'m your AI study assistant. Ask me anything about '
+              'your schedule, subjects, or study tips.',
           isUser: false,
         ),
       );
@@ -182,7 +194,9 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
 
   Future<void> _sendMessage() async {
     final text = _inputController.text.trim();
-    if (text.isEmpty || _isBotTyping) return;
+    if ((text.isEmpty && _stagedFile == null) || _isBotTyping) return;
+
+    final fileToSend = _stagedFile;
 
     // Clear field and optimistically add the user bubble
     _inputController.clear();
@@ -190,17 +204,36 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
       await _speech.stop();
       setState(() => _isListening = false);
     }
+    
     setState(() {
-      _messages.add(_ChatMessage(text: text, isUser: true));
+      _messages.add(
+        _ChatMessage(
+          text: text, 
+          isUser: true,
+          attachedFilePath: fileToSend?.path,
+        )
+      );
       _isBotTyping = true;
+      _stagedFile = null;
+      _hasText = false;
     });
     _scrollToBottom();
 
     try {
-      final result = await ChatbotService.converse(
-        message: text,
-        conversationId: _conversationId,
-      );
+      final ConverseResult result;
+      if (fileToSend != null) {
+        result = await ChatbotService.converseWithFile(
+          file: fileToSend,
+          tool: 'ocr_exam_parser', // dynamic based on file type or context
+          message: text,
+          conversationId: _conversationId,
+        );
+      } else {
+        result = await ChatbotService.converse(
+          message: text,
+          conversationId: _conversationId,
+        );
+      }
 
       if (!mounted) return;
       setState(() {
@@ -217,11 +250,9 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
       if (!mounted) return;
       setState(() {
         _isBotTyping = false;
-        _messages.add(_ChatMessage(
-          text: '⚠️ ${e.message}',
-          isUser: false,
-          isError: true,
-        ));
+        _messages.add(
+          _ChatMessage(text: '⚠️ ${e.message}', isUser: false, isError: true),
+        );
       });
     }
 
@@ -248,6 +279,7 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
     _speech.stop();
     super.dispose();
   }
+
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
@@ -271,11 +303,11 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
           children: [
             // ── Layer 0: Parallax background ──────────────────────────────
             ParallaxBackground(
-              scrollOffset: _scrollOffset,
+              scrollOffset: 0,
               overscrollAllowance: overscrollAllowance,
               screenHeight: screenHeight,
             ),
-  
+
             // ── Layer 1: Main content or Loading ───────────────────────────
             if (_isFirstLoad)
               const GlobalLoader()
@@ -284,38 +316,40 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                 bottom: false,
                 child: Column(
                   children: [
-                  // Header
-                  _buildHeader(),
-  
-                  // Message list
-                  Expanded(
-                    child: _isLoadingMessages
-                        ? const GlobalLoader(transparentBg: true)
-                        : ListView.builder(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
-                            ),
-                            // Extra item when bot is typing
-                            itemCount: _messages.length + (_isBotTyping ? 1 : 0),
-                            itemBuilder: (_, i) {
-                              if (_isBotTyping && i == _messages.length) {
-                                return _buildTypingIndicator();
-                              }
-                              return _buildBubble(_messages[i]);
-                            },
-                          ),
-                  ),
-  
-                  // Input bar 
-                  _buildInputBar(),
-                  // Space for navbar when only greeting is shown
-                  SizedBox(height: _messages.length <= 1 ? 110 : 16),
-                ],
+                    // Header
+                    _buildHeader(),
+
+                    // Message list
+                    Expanded(
+                      child:
+                          _isLoadingMessages
+                              ? const GlobalLoader(transparentBg: true)
+                              : ListView.builder(
+                                controller: _scrollController,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 12,
+                                ),
+                                // Extra item when bot is typing
+                                itemCount:
+                                    _messages.length + (_isBotTyping ? 1 : 0),
+                                itemBuilder: (_, i) {
+                                  if (_isBotTyping && i == _messages.length) {
+                                    return _buildTypingIndicator();
+                                  }
+                                  return _buildBubble(_messages[i]);
+                                },
+                              ),
+                    ),
+
+                    // Input bar
+                    _buildInputBar(),
+                    // Space for navbar when only greeting is shown
+                    SizedBox(height: _messages.length <= 1 ? 110 : 16),
+                  ],
+                ),
               ),
-            ),
-  
+
             // ── Layer 2: Floating navbar ───────────────────────────────────
             if (!_isFirstLoad && _messages.length <= 1)
               FloatingBottomNavbar(
@@ -339,6 +373,7 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
           _NeumorphicIconButton(
             icon: Icons.menu_rounded,
             onTap: () {
+              FocusScope.of(context).unfocus();
               _scaffoldKey.currentState?.openDrawer();
             },
           ),
@@ -401,10 +436,13 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                     isActive: false,
                     onTap: () => _startNewConversation(fromDrawer: true),
                   ),
-                  
+
                   // ── Inline Search Field ──
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     child: Container(
                       decoration: BoxDecoration(
                         color: AppTheme.backgroundColor,
@@ -428,14 +466,30 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                         ),
                         child: TextField(
                           controller: _sidebarSearchController,
-                          onChanged: (val) => setState(() => _sidebarSearchQuery = val),
-                          style: const TextStyle(fontSize: 14, color: AppTheme.textColor),
+                          onChanged:
+                              (val) =>
+                                  setState(() => _sidebarSearchQuery = val),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppTheme.textColor,
+                          ),
                           decoration: InputDecoration(
                             hintText: 'Search chats...',
-                            hintStyle: TextStyle(color: AppTheme.descriptionTextColor.withValues(alpha: 0.5), fontSize: 13),
-                            prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppTheme.descriptionTextColor),
+                            hintStyle: TextStyle(
+                              color: AppTheme.descriptionTextColor.withValues(
+                                alpha: 0.5,
+                              ),
+                              fontSize: 13,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              size: 18,
+                              color: AppTheme.descriptionTextColor,
+                            ),
                             border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                            ),
                           ),
                         ),
                       ),
@@ -490,22 +544,34 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
           padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           child: Text(
             'No previous chats',
-            style: TextStyle(color: AppTheme.descriptionTextColor, fontSize: 13),
+            style: TextStyle(
+              color: AppTheme.descriptionTextColor,
+              fontSize: 13,
+            ),
           ),
         ),
       ];
     }
 
-    final filteredHistory = _history.where((c) => 
-      c.title.toLowerCase().contains(_sidebarSearchQuery.toLowerCase())).toList();
-    
+    final filteredHistory =
+        _history
+            .where(
+              (c) => c.title.toLowerCase().contains(
+                _sidebarSearchQuery.toLowerCase(),
+              ),
+            )
+            .toList();
+
     if (filteredHistory.isEmpty) {
       return [
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           child: Text(
             'No matches found',
-            style: TextStyle(color: AppTheme.descriptionTextColor, fontSize: 13),
+            style: TextStyle(
+              color: AppTheme.descriptionTextColor,
+              fontSize: 13,
+            ),
           ),
         ),
       ];
@@ -537,58 +603,64 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: CustomPaint(
-          painter: isActive
-              ? _InnerShadowPainter(
-                  borderRadius: radius,
-                  shadows: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.12),
-                      offset: const Offset(2, 2),
-                      blurRadius: 4,
-                    ),
-                    const BoxShadow(
-                      color: AppTheme.buttonHighlightColor,
-                      offset: Offset(-2, -2),
-                      blurRadius: 4,
-                    ),
-                  ],
-                )
-              : null,
+          painter:
+              isActive
+                  ? _InnerShadowPainter(
+                    borderRadius: radius,
+                    shadows: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        offset: const Offset(2, 2),
+                        blurRadius: 4,
+                      ),
+                      const BoxShadow(
+                        color: AppTheme.buttonHighlightColor,
+                        offset: Offset(-2, -2),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  )
+                  : null,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: AppTheme.backgroundColor,
               borderRadius: BorderRadius.circular(radius),
-              boxShadow: isActive
-                  ? null
-                  : [
-                      // Bottom-right shadow (outward elevate)
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        offset: const Offset(4, 4),
-                        blurRadius: 8,
-                      ),
-                      // Top-left highlight (elevation)
-                      const BoxShadow(
-                        color: AppTheme.buttonHighlightColor,
-                        offset: Offset(-4, -4),
-                        blurRadius: 8,
-                      ),
-                    ],
+              boxShadow:
+                  isActive
+                      ? null
+                      : [
+                        // Bottom-right shadow (outward elevate)
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          offset: const Offset(4, 4),
+                          blurRadius: 8,
+                        ),
+                        // Top-left highlight (elevation)
+                        const BoxShadow(
+                          color: AppTheme.buttonHighlightColor,
+                          offset: Offset(-4, -4),
+                          blurRadius: 8,
+                        ),
+                      ],
             ),
             child: Row(
               children: [
                 Icon(
                   icon,
                   size: 18,
-                  color: isActive ? AppTheme.primaryColor : AppTheme.descriptionTextColor,
+                  color:
+                      isActive
+                          ? AppTheme.primaryColor
+                          : AppTheme.descriptionTextColor,
                 ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
                     label,
                     style: TextStyle(
-                      color: isActive ? AppTheme.primaryColor : AppTheme.textColor,
+                      color:
+                          isActive ? AppTheme.primaryColor : AppTheme.textColor,
                       fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
                       fontSize: 14,
                     ),
@@ -610,16 +682,118 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
     for (int i = 0; i < lines.length; i++) {
       if (lines[i].contains('|')) {
         // Inside a table row: a direct \n replacement would shatter the column struct. Use a space.
-        lines[i] = lines[i].replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), ' ');
+        lines[i] = lines[i].replaceAll(
+          RegExp(r'<br\s*/?>', caseSensitive: false),
+          ' ',
+        );
       } else {
         // Not a table: a structural \n is safe.
-        lines[i] = lines[i].replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+        lines[i] = lines[i].replaceAll(
+          RegExp(r'<br\s*/?>', caseSensitive: false),
+          '\n',
+        );
       }
     }
     return lines.join('\n');
   }
 
   // ── Chat bubble ────────────────────────────────────────────────────────────
+
+  Widget _buildAttachmentPreview(String filePath) {
+    final lowerPath = filePath.toLowerCase();
+    final isImage = lowerPath.endsWith('.jpg') ||
+                    lowerPath.endsWith('.jpeg') ||
+                    lowerPath.endsWith('.png');
+    final fileName = filePath.split('\\').last.split('/').last;
+
+    return GestureDetector(
+      onTap: () {
+        if (isImage) {
+          showGeneralDialog(
+            context: context,
+            barrierColor: Colors.black.withValues(alpha: 0.9),
+            barrierDismissible: true,
+            barrierLabel: 'Close Preview',
+            pageBuilder: (context, _, __) {
+              return Material(
+                color: Colors.transparent,
+                child: Stack(
+                  children: [
+                    Center(
+                      child: InteractiveViewer(
+                        panEnabled: true,
+                        minScale: 1.0,
+                        maxScale: 4.0,
+                        child: Image.file(File(filePath)),
+                      ),
+                    ),
+                    Positioned(
+                      top: 48,
+                      right: 24,
+                      child: GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        } else {
+          OpenFilex.open(filePath);
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: isImage ? EdgeInsets.zero : const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: isImage
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(
+                  File(filePath),
+                  height: 160,
+                  width: 200,
+                  fit: BoxFit.cover,
+                ),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.insert_drive_file_rounded, color: AppTheme.primaryColor, size: 24),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      fileName,
+                      style: const TextStyle(
+                        color: AppTheme.textColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
 
   Widget _buildBubble(_ChatMessage msg) {
     return Padding(
@@ -671,49 +845,58 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                   bottomLeft: Radius.circular(msg.isUser ? 20 : 4),
                   bottomRight: Radius.circular(msg.isUser ? 4 : 20),
                 ),
-                boxShadow: msg.isUser
-                    ? [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.15),
-                          offset: const Offset(4, 4),
-                          blurRadius: 10,
-                          spreadRadius: -1,
-                        ),
-                        const BoxShadow(
-                          color: AppTheme.buttonHighlightColor,
-                          offset: Offset(-4, -4),
-                          blurRadius: 10,
-                          spreadRadius: -1,
-                        ),
-                      ]
-                    : [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.10),
-                          offset: const Offset(3, 3),
-                          blurRadius: 8,
-                          spreadRadius: -1,
-                        ),
-                        const BoxShadow(
-                          color: AppTheme.buttonHighlightColor,
-                          offset: Offset(-3, -3),
-                          blurRadius: 8,
-                          spreadRadius: -1,
-                        ),
-                      ],
+                boxShadow:
+                    msg.isUser
+                        ? [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            offset: const Offset(4, 4),
+                            blurRadius: 10,
+                            spreadRadius: -1,
+                          ),
+                          const BoxShadow(
+                            color: AppTheme.buttonHighlightColor,
+                            offset: Offset(-4, -4),
+                            blurRadius: 10,
+                            spreadRadius: -1,
+                          ),
+                        ]
+                        : [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.10),
+                            offset: const Offset(3, 3),
+                            blurRadius: 8,
+                            spreadRadius: -1,
+                          ),
+                          const BoxShadow(
+                            color: AppTheme.buttonHighlightColor,
+                            offset: Offset(-3, -3),
+                            blurRadius: 8,
+                            spreadRadius: -1,
+                          ),
+                        ],
               ),
-              child: MarkdownBlock(
-                data: _cleanMarkdown(msg.text),
-                config: MarkdownConfig(
-                  configs: [
-                    PConfig(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (msg.attachedFilePath != null)
+                    _buildAttachmentPreview(msg.attachedFilePath!),
+                  if (msg.text.isNotEmpty)
+                    MarkdownBlock(
+                      data: _cleanMarkdown(msg.text),
+                      config: MarkdownConfig(
+                        configs: [
+                          PConfig(
                       textStyle: TextStyle(
-                        color: msg.isError
-                            ? AppTheme.highlightColor
-                            : msg.isUser
+                        color:
+                            msg.isError
+                                ? AppTheme.highlightColor
+                                : msg.isUser
                                 ? AppTheme.primaryColor
                                 : AppTheme.textColor,
                         fontSize: 15,
-                        fontWeight: msg.isUser ? FontWeight.w600 : FontWeight.normal,
+                        fontWeight:
+                            msg.isUser ? FontWeight.w600 : FontWeight.normal,
                         height: 1.5,
                       ),
                     ),
@@ -722,71 +905,88 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                       marker: (isOrdered, depth, index) {
                         return Padding(
                           padding: const EdgeInsets.only(right: 6, top: 4),
-                          child: isOrdered
-                              ? Text(
-                                  '${index + 1}.',
-                                  style: TextStyle(
-                                    color: msg.isUser
-                                        ? AppTheme.primaryColor
-                                        : AppTheme.textColor,
-                                    fontSize: 15,
-                                    height: 1.5,
+                          child:
+                              isOrdered
+                                  ? Text(
+                                    '${index + 1}.',
+                                    style: TextStyle(
+                                      color:
+                                          msg.isUser
+                                              ? AppTheme.primaryColor
+                                              : AppTheme.textColor,
+                                      fontSize: 15,
+                                      height: 1.5,
+                                    ),
+                                  )
+                                  : Container(
+                                    width: 5,
+                                    height: 5,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          msg.isUser
+                                              ? AppTheme.primaryColor
+                                              : AppTheme.textColor,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
-                                )
-                              : Container(
-                                  width: 5,
-                                  height: 5,
-                                  decoration: BoxDecoration(
-                                    color: msg.isUser
-                                        ? AppTheme.primaryColor
-                                        : AppTheme.textColor,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
                         );
                       },
                     ),
                     H1Config(
                       style: TextStyle(
-                        color: msg.isUser ? AppTheme.primaryColor : AppTheme.textColor,
+                        color:
+                            msg.isUser
+                                ? AppTheme.primaryColor
+                                : AppTheme.textColor,
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     H2Config(
                       style: TextStyle(
-                        color: msg.isUser ? AppTheme.primaryColor : AppTheme.textColor,
+                        color:
+                            msg.isUser
+                                ? AppTheme.primaryColor
+                                : AppTheme.textColor,
                         fontSize: 19,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     H3Config(
                       style: TextStyle(
-                        color: msg.isUser ? AppTheme.primaryColor : AppTheme.textColor,
+                        color:
+                            msg.isUser
+                                ? AppTheme.primaryColor
+                                : AppTheme.textColor,
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     TableConfig(
-                      wrapper: (table) => Container(
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: AppTheme.descriptionTextColor.withValues(alpha: 0.2),
+                      wrapper:
+                          (table) => Container(
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: AppTheme.descriptionTextColor.withValues(
+                                  alpha: 0.2,
+                                ),
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: table,
+                            ),
                           ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: table,
-                        ),
-                      ),
                     ),
                   ],
                 ),
               ),
-            ),
+            ],
           ),
+        ),
+      ),
           if (msg.isUser) const SizedBox(width: 8),
         ],
       ),
@@ -870,7 +1070,12 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
   Widget _buildInputBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Container(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_stagedFile != null) _buildStagedFilePreview(),
+          Container(
         decoration: BoxDecoration(
           color: AppTheme.backgroundColor,
           borderRadius: BorderRadius.circular(28),
@@ -882,13 +1087,13 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.22),
                 offset: const Offset(4, 4),
-                blurRadius: 10,
+                blurRadius: 3,
                 spreadRadius: -1,
               ),
               const BoxShadow(
                 color: AppTheme.buttonHighlightColor,
                 offset: Offset(-4, -4),
-                blurRadius: 10,
+                blurRadius: 3,
                 spreadRadius: -1,
               ),
             ],
@@ -946,95 +1151,185 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                 // ── Mic  ↔  Send arrow (AnimatedSwitcher) ─────────────
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 180),
-                  transitionBuilder: (child, anim) => ScaleTransition(
-                    scale: anim,
-                    child: child,
-                  ),
-                  child: _hasText
-                      // ── Send arrow ──────────────────────────────────
-                      ? GestureDetector(
-                          key: const ValueKey('send'),
-                          onTap: _sendMessage,
-                          behavior: HitTestBehavior.opaque,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(4, 8, 10, 8),
-                            child: Icon(
-                              Icons.arrow_upward_rounded,
-                              color: AppTheme.primaryColor,
-                              size: 24,
-                            ),
-                          ),
-                        )
-                      // ── Mic ─────────────────────────────────────────
-                      : GestureDetector(
-                          key: const ValueKey('mic'),
-                          onTap: _toggleListening,
-                          behavior: HitTestBehavior.opaque,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(4, 8, 10, 8),
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 200),
+                  transitionBuilder:
+                      (child, anim) =>
+                          ScaleTransition(scale: anim, child: child),
+                  child:
+                      _hasText
+                          // ── Send arrow ──────────────────────────────────
+                          ? GestureDetector(
+                            key: const ValueKey('send'),
+                            onTap: _sendMessage,
+                            behavior: HitTestBehavior.opaque,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(4, 8, 10, 8),
                               child: Icon(
-                                _isListening
-                                    ? Icons.mic_rounded
-                                    : Icons.mic_none_rounded,
-                                key: ValueKey(_isListening),
-                                color: _isListening
-                                    ? AppTheme.lightGreen
-                                    : AppTheme.descriptionTextColor,
+                                Icons.arrow_upward_rounded,
+                                color: AppTheme.primaryColor,
                                 size: 24,
                               ),
                             ),
+                          )
+                          // ── Mic ─────────────────────────────────────────
+                          : GestureDetector(
+                            key: const ValueKey('mic'),
+                            onTap: _toggleListening,
+                            behavior: HitTestBehavior.opaque,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(4, 8, 10, 8),
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 200),
+                                child: Icon(
+                                  _isListening
+                                      ? Icons.mic_rounded
+                                      : Icons.mic_none_rounded,
+                                  key: ValueKey(_isListening),
+                                  color:
+                                      _isListening
+                                          ? AppTheme.lightGreen
+                                          : AppTheme.descriptionTextColor,
+                                  size: 24,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
                 ),
               ],
             ),
           ),
         ),
+        ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStagedFilePreview() {
+    final isImage = _stagedFile!.path.toLowerCase().endsWith('.jpg') ||
+                    _stagedFile!.path.toLowerCase().endsWith('.jpeg') ||
+                    _stagedFile!.path.toLowerCase().endsWith('.png');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            offset: const Offset(2, 2),
+            blurRadius: 4,
+          ),
+          const BoxShadow(
+            color: AppTheme.buttonHighlightColor,
+            offset: Offset(-2, -2),
+            blurRadius: 4,
+          ),
+        ]
+      ),
+      child: Row(
+        children: [
+          if (isImage)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.file(_stagedFile!, width: 44, height: 44, fit: BoxFit.cover),
+            )
+          else
+            const Icon(Icons.insert_drive_file_rounded, color: AppTheme.primaryColor, size: 40),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _stagedFile!.path.split('\\').last.split('/').last,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppTheme.textColor),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, color: AppTheme.descriptionTextColor),
+            onPressed: () {
+              setState(() {
+                _stagedFile = null;
+                _hasText = _inputController.text.trim().isNotEmpty;
+              });
+            },
+          )
+        ],
       ),
     );
   }
 
 
+  Future<void> _pickImage(ImageSource source) async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: source);
+    if (pickedFile != null) {
+      setState(() {
+        _stagedFile = File(pickedFile.path);
+        _hasText = true;
+      });
+    }
+  }
+
+  Future<void> _pickDocument() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+    );
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        _stagedFile = File(result.files.single.path!);
+        _hasText = true;
+      });
+    }
+  }
+
   void _showAttachOptions() {
+    // Dismiss keyboard so it doesn't reopen when the sheet is dismissed
+    FocusScope.of(context).unfocus();
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(36)),
       ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      builder: (_) => Container(
+        decoration: BoxDecoration(
+          color: AppTheme.backgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(36)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              offset: const Offset(0, -6),
+              blurRadius: 24,
+            ),
+            const BoxShadow(
+              color: AppTheme.buttonHighlightColor,
+              offset: Offset(0, -1),
+              blurRadius: 0,
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppTheme.descriptionTextColor.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
+            // Neumorphic inset drag handle — same as alert card
+            CustomPaint(
+              painter: _AttachHandlePainter(),
+              child: const SizedBox(width: 56, height: 8),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _AttachOption(
-                  icon: Icons.insert_drive_file_rounded,
-                  label: 'Document',
+                  icon: Icons.image_rounded,
+                  label: 'File',
                   onTap: () {
                     Navigator.pop(context);
-                    // TODO: file picker
-                  },
-                ),
-                _AttachOption(
-                  icon: Icons.photo_library_rounded,
-                  label: 'Gallery',
-                  onTap: () {
-                    Navigator.pop(context);
-                    // TODO: image picker
+                    _pickDocument();
                   },
                 ),
                 _AttachOption(
@@ -1042,17 +1337,56 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                   label: 'Camera',
                   onTap: () {
                     Navigator.pop(context);
-                    // TODO: camera
+                    _pickImage(ImageSource.camera);
                   },
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
           ],
         ),
       ),
     );
   }
+}
+
+// ── Neumorphic inset drag handle painter (mirrors _HandlePainter in neumorphic_alert.dart) ──
+class _AttachHandlePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final rRect = RRect.fromRectAndRadius(rect, const Radius.circular(4));
+
+    canvas.drawRRect(rRect, Paint()..color = AppTheme.backgroundColor);
+    canvas.clipRRect(rRect);
+
+    final shadows = [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: 0.15),
+        offset: const Offset(1.5, 1.5),
+        blurRadius: 2.0,
+      ),
+      BoxShadow(
+        color: AppTheme.buttonHighlightColor.withValues(alpha: 0.9),
+        offset: const Offset(-1.5, -1.5),
+        blurRadius: 2.0,
+      ),
+    ];
+
+    for (final shadow in shadows) {
+      final shadowPaint = Paint()
+        ..color = shadow.color
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, shadow.blurRadius);
+      final holeRect = rRect.shift(shadow.offset);
+      final path = Path()
+        ..addRect(rect.inflate(shadow.blurRadius * 5))
+        ..addRRect(holeRect);
+      canvas.drawPath(path..fillType = PathFillType.evenOdd, shadowPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_AttachHandlePainter _) => false;
 }
 
 // ── Data model ─────────────────────────────────────────────────────────────
@@ -1061,10 +1395,12 @@ class _ChatMessage {
   final String text;
   final bool isUser;
   final bool isError;
+  final String? attachedFilePath;
   _ChatMessage({
     required this.text,
     required this.isUser,
     this.isError = false,
+    this.attachedFilePath,
   });
 }
 
@@ -1106,8 +1442,6 @@ class _NeumorphicIconButton extends StatelessWidget {
     );
   }
 }
-
-
 
 class _AttachOption extends StatelessWidget {
   final IconData icon;
@@ -1176,18 +1510,22 @@ class _InnerShadowPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final boundsPath = Path()
-      ..addRRect(RRect.fromRectAndRadius(rect, Radius.circular(borderRadius)));
+    final boundsPath =
+        Path()..addRRect(
+          RRect.fromRectAndRadius(rect, Radius.circular(borderRadius)),
+        );
     canvas.clipPath(boundsPath);
 
     for (final shadow in shadows) {
-      final paint = Paint()
-        ..color = shadow.color
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, shadow.blurRadius);
+      final paint =
+          Paint()
+            ..color = shadow.color
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, shadow.blurRadius);
       final holeRect = rect.shift(shadow.offset).inflate(shadow.spreadRadius);
       final path = Path()..addRect(rect.inflate(shadow.blurRadius * 5));
       path.addRRect(
-          RRect.fromRectAndRadius(holeRect, Radius.circular(borderRadius)));
+        RRect.fromRectAndRadius(holeRect, Radius.circular(borderRadius)),
+      );
       canvas.drawPath(path..fillType = PathFillType.evenOdd, paint);
     }
   }
@@ -1196,5 +1534,3 @@ class _InnerShadowPainter extends CustomPainter {
   bool shouldRepaint(covariant _InnerShadowPainter old) =>
       old.borderRadius != borderRadius || old.shadows != shadows;
 }
-
-

@@ -3,8 +3,11 @@ import '../../core/theme/app_theme.dart';
 import '../../widgets/parallax_background.dart';
 import '../../widgets/floating_bottom_navbar.dart';
 import '../../widgets/global_loader.dart';
+import '../../widgets/fade_indexed_stack.dart';
 import 'dashboard_content.dart';
 import 'mobile_chatbot_screen.dart';
+import 'mobile_timetable_screen.dart';
+import 'mobile_profile_screen.dart';
 
 class MobileHomeScreen extends StatefulWidget {
   const MobileHomeScreen({super.key});
@@ -24,7 +27,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   final FocusNode _searchFocusNode = FocusNode();
   bool _searchActive = false;
   bool _hasText = false;
-  
+
   String? _pendingPrompt;
   bool _isScreenLoading = true;
 
@@ -80,20 +83,44 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return ColoredBox(
+      color: AppTheme.backgroundColor,
+      child: FadeIndexedStack(
+        duration: const Duration(milliseconds: 500),
+        index: _currentNavIndex,
+      children: [
+        _buildDashboardScreen(context),
+        MobileChatbotScreen(
+          initialNavIndex: _currentNavIndex,
+          initialPrompt: _pendingPrompt,
+          onNavTap: (index) {
+            if (index == 0) _pendingPrompt = null;
+            setState(() => _currentNavIndex = index);
+          },
+        ),
+        MobileTimetableScreen(
+          initialNavIndex: _currentNavIndex,
+          onNavTap: (index) => setState(() => _currentNavIndex = index),
+        ),
+        // Placeholder for Cards (3)
+        MobileChatbotScreen(
+          initialNavIndex: _currentNavIndex,
+          initialPrompt: null,
+          onNavTap: (index) => setState(() => _currentNavIndex = index),
+        ),
+        MobileProfileScreen(
+          initialNavIndex: _currentNavIndex,
+          onNavTap: (index) => setState(() => _currentNavIndex = index),
+        ),
+      ],
+    ),
+  );
+}
+
+  Widget _buildDashboardScreen(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final overscrollAllowance = screenHeight * 0.15;
     final statusBarHeight = MediaQuery.of(context).padding.top;
-
-    if (_currentNavIndex != 0) {
-      return MobileChatbotScreen(
-        initialNavIndex: _currentNavIndex,
-        initialPrompt: _currentNavIndex == 1 ? _pendingPrompt : null,
-        onNavTap: (index) {
-          if (index == 0) _pendingPrompt = null;
-          setState(() => _currentNavIndex = index);
-        },
-      );
-    }
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
@@ -114,9 +141,10 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
             Positioned.fill(
               child: ListView(
                 controller: _scrollController,
-                physics: _searchActive
-                    ? const NeverScrollableScrollPhysics()
-                    : const BouncingScrollPhysics(),
+                physics:
+                    _searchActive
+                        ? const NeverScrollableScrollPhysics()
+                        : const BouncingScrollPhysics(),
                 children: [
                   DashboardContent(
                     searchActive: _searchActive,
@@ -132,7 +160,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
               onTap: (index) => setState(() => _currentNavIndex = index),
             ),
 
-            // ── Layer 3: Full-screen dim overlay (covers navbar too) ──────────
+            // ── Layer 3: Full-screen dim overlay ───────────────────────────
+            // Placed BELOW the search bar so overlay never intercepts search taps
             if (_searchActive)
               Positioned.fill(
                 child: GestureDetector(
@@ -144,7 +173,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                 ),
               ),
 
-            // ── Layer 4: Search bar — always above everything ─────────────────
+            // ── Layer 4: Search bar — always topmost ────────────────────────
             Positioned(
               top: statusBarHeight + 12,
               left: 24,
@@ -158,9 +187,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   }
 
   Widget _buildSearchBar() {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeInOut,
+    return Container(
       decoration: BoxDecoration(
         color: AppTheme.backgroundColor,
         borderRadius: BorderRadius.circular(24),
@@ -170,16 +197,19 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           borderRadius: 24,
           shadows: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: _searchActive ? 0.30 : 0.22),
+              color: Colors.black.withValues(
+                alpha: _searchActive ? 0.30 : 0.22,
+              ),
               offset: const Offset(4, 4),
-              blurRadius: 8,
+              blurRadius: 3,
               spreadRadius: -1,
             ),
             BoxShadow(
-              color: AppTheme.buttonHighlightColor
-                  .withValues(alpha: _searchActive ? 1.0 : 0.85),
+              color: AppTheme.buttonHighlightColor.withValues(
+                alpha: _searchActive ? 1.0 : 0.85,
+              ),
               offset: const Offset(-4, -4),
-              blurRadius: 8,
+              blurRadius: 3,
               spreadRadius: -1,
             ),
           ],
@@ -222,9 +252,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                   child: const SizedBox(
                     width: 32,
                     height: 32,
-                    child: CustomPaint(
-                      painter: _NeumorphicArrowPainter(),
-                    ),
+                    child: CustomPaint(painter: _NeumorphicArrowPainter()),
                   ),
                 ),
               ],
@@ -250,14 +278,17 @@ class _SearchBarInnerShadowPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final boundsPath = Path()
-      ..addRRect(RRect.fromRectAndRadius(rect, Radius.circular(borderRadius)));
+    final boundsPath =
+        Path()..addRRect(
+          RRect.fromRectAndRadius(rect, Radius.circular(borderRadius)),
+        );
     canvas.clipPath(boundsPath);
 
     for (var shadow in shadows) {
-      final shadowPaint = Paint()
-        ..color = shadow.color
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, shadow.blurRadius);
+      final shadowPaint =
+          Paint()
+            ..color = shadow.color
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, shadow.blurRadius);
 
       final holeRect = rect.shift(shadow.offset).inflate(shadow.spreadRadius);
       final shadowPath = Path()..addRect(rect.inflate(shadow.blurRadius * 5));
@@ -285,32 +316,41 @@ class _NeumorphicArrowPainter extends CustomPainter {
     final arrowH = size.height * 0.26;
     const strokeW = 3.0;
 
-    final darkPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.28)
-      ..strokeWidth = strokeW
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2);
+    final darkPaint =
+        Paint()
+          ..color = Colors.black.withValues(alpha: 0.28)
+          ..strokeWidth = strokeW
+          ..strokeCap = StrokeCap.round
+          ..style = PaintingStyle.stroke
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2);
     _drawChevron(canvas, cx + 1.5, cy + 1.5, arrowW, arrowH, darkPaint);
 
-    final lightPaint = Paint()
-      ..color = AppTheme.buttonHighlightColor.withValues(alpha: 0.75)
-      ..strokeWidth = strokeW
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2);
+    final lightPaint =
+        Paint()
+          ..color = AppTheme.buttonHighlightColor.withValues(alpha: 0.75)
+          ..strokeWidth = strokeW
+          ..strokeCap = StrokeCap.round
+          ..style = PaintingStyle.stroke
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2);
     _drawChevron(canvas, cx - 1.5, cy - 1.5, arrowW, arrowH, lightPaint);
 
-    final mainPaint = Paint()
-      ..color = AppTheme.primaryColor
-      ..strokeWidth = strokeW
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
+    final mainPaint =
+        Paint()
+          ..color = AppTheme.primaryColor
+          ..strokeWidth = strokeW
+          ..strokeCap = StrokeCap.round
+          ..style = PaintingStyle.stroke;
     _drawChevron(canvas, cx, cy, arrowW, arrowH, mainPaint);
   }
 
   void _drawChevron(
-      Canvas canvas, double cx, double cy, double w, double h, Paint paint) {
+    Canvas canvas,
+    double cx,
+    double cy,
+    double w,
+    double h,
+    Paint paint,
+  ) {
     final path = Path();
     path.moveTo(cx - w, cy - h);
     path.lineTo(cx + w, cy);

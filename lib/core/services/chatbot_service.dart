@@ -255,14 +255,116 @@ class ChatbotService {
     }
   }
 
+  /// Sends a multipart request to the AI, e.g., for uploading an image or doc.
+  static Future<ConverseResult> converseWithFile({
+    required File file,
+    String tool = 'ocr_exam_parser',
+    String? message,
+    int? conversationId,
+  }) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/api/chatbot/converse/');
+      var headers = await _authHeaders();
+
+      Future<http.Response> doRequest(Map<String, String> currentHeaders) async {
+        final req = http.MultipartRequest('POST', uri);
+        final hdrs = Map<String, String>.from(currentHeaders)..remove('Content-Type');
+        req.headers.addAll(hdrs);
+        req.fields['tool'] = tool;
+        if (message != null && message.isNotEmpty) req.fields['message'] = message;
+        if (conversationId != null) req.fields['conversation_id'] = conversationId.toString();
+        
+        req.files.add(await http.MultipartFile.fromPath('exam_image', file.path));
+        
+        final streamed = await req.send().timeout(_timeout);
+        return await http.Response.fromStream(streamed);
+      }
+
+      // Un-cache preemptively since state is aggressively changing.
+      _cachedHistory = null;
+      if (conversationId != null) {
+        _cachedMessages.remove(conversationId);
+        _messagesLastFetched.remove(conversationId);
+      }
+
+      var response = await doRequest(headers);
+
+      if (response.statusCode == 401) {
+        final prefs = await SharedPreferences.getInstance();
+        final refreshToken = prefs.getString('refresh_token');
+
+        if (refreshToken == null || refreshToken.isEmpty) {
+          throw const ChatbotException('Session expired. Please log in again.', statusCode: 401);
+        }
+
+        final refreshResp = await http.post(
+          Uri.parse('$_baseUrl/api/auth/token/refresh/'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'refresh': refreshToken}),
+        ).timeout(_timeout);
+
+        if (refreshResp.statusCode == 200) {
+          final data = jsonDecode(refreshResp.body);
+          final newAccess = data['access'];
+          if (newAccess != null) {
+            await prefs.setString('access_token', newAccess);
+            if (data['refresh'] != null) {
+              await prefs.setString('refresh_token', data['refresh']);
+            }
+            headers = await _authHeaders(newAccess);
+            response = await doRequest(headers);
+          } else {
+            throw const ChatbotException('Session expired. Please log in again.', statusCode: 401);
+          }
+        } else {
+          throw const ChatbotException('Session expired. Please log in again.', statusCode: 401);
+        }
+      }
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return ConverseResult.fromJson(data);
+      }
+
+      String errorMsg = 'Server error (${response.statusCode})';
+      try {
+        final err = jsonDecode(response.body) as Map<String, dynamic>;
+        if (err['error'] != null) errorMsg = err['error'] as String;
+        if (err['detail'] != null) errorMsg = err['detail'] as String;
+      } catch (_) {}
+      throw ChatbotException(errorMsg, statusCode: response.statusCode);
+    } catch (e) {
+      throw _mapError(e);
+    }
+  }
+
   // ── GET /api/chatbot/conversations/ ──────────────────────────────────────
 
-  static Future<List<ConversationSummary>> listConversations() async {
+  static Future<List<ConversationSummary>> listConversations({bool forceRefresh = false}) async {
     // Return cached list if valid and within TTL buffer.
-    if (_cachedHistory != null &&
+    if (!forceRefresh && _cachedHistory != null &&
         _historyLastFetched != null &&
         DateTime.now().difference(_historyLastFetched!) < _cacheDuration) {
       return _cachedHistory!;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    if (!forceRefresh) {
+      final cachedStr = prefs.getString('cached_chat_conversations');
+      final fetchedAtStr = prefs.getString('chat_conversations_fetched_at');
+      if (cachedStr != null && fetchedAtStr != null) {
+        final fetchedAt = DateTime.tryParse(fetchedAtStr);
+        // Cache valid for 2 hours persistently
+        if (fetchedAt != null && DateTime.now().difference(fetchedAt) < const Duration(hours: 2)) {
+          try {
+             final list = jsonDecode(cachedStr) as List<dynamic>;
+             final typedList = list.map((e) => ConversationSummary.fromJson(e as Map<String, dynamic>)).toList();
+             _cachedHistory = typedList;
+             _historyLastFetched = fetchedAt;
+             return typedList;
+          } catch (_) {}
+        }
+      }
     }
 
     try {
@@ -281,6 +383,9 @@ class ChatbotService {
         _cachedHistory = typedList;
         _historyLastFetched = DateTime.now();
         
+        await prefs.setString('cached_chat_conversations', response.body);
+        await prefs.setString('chat_conversations_fetched_at', DateTime.now().toIso8601String());
+        
         return typedList;
       }
       throw ChatbotException(
@@ -288,6 +393,13 @@ class ChatbotService {
         statusCode: response.statusCode,
       );
     } catch (e) {
+      final cachedStr = prefs.getString('cached_chat_conversations');
+      if (cachedStr != null && !forceRefresh) {
+         try {
+             final list = jsonDecode(cachedStr) as List<dynamic>;
+             return list.map((e) => ConversationSummary.fromJson(e as Map<String, dynamic>)).toList();
+         } catch (_) {}
+      }
       throw _mapError(e);
     }
   }

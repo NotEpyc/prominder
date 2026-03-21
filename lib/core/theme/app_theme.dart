@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Primary: Deep Forest
@@ -23,6 +24,13 @@ class AppTheme {
   // Text: Deep Mocha
   static const Color descriptionTextColor = Color(0xFF5A6658);
 
+  // Typography for highlight words
+  static TextStyle get highlightTextStyle => GoogleFonts.playfairDisplay(
+    color: highlightColor,
+    fontWeight: FontWeight.w800,
+    fontStyle: FontStyle.italic,
+  );
+
   static ThemeData get lightTheme {
     return ThemeData(
       primaryColor: primaryColor,
@@ -40,12 +48,14 @@ class AppTheme {
         elevation: 0,
         centerTitle: true,
       ),
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(color: textColor, fontWeight: FontWeight.bold),
-        displayMedium: TextStyle(color: textColor, fontWeight: FontWeight.bold),
-        titleLarge: TextStyle(color: textColor, fontWeight: FontWeight.w600),
-        bodyLarge: TextStyle(color: textColor),
-        bodyMedium: TextStyle(color: textColor),
+      textTheme: GoogleFonts.manropeTextTheme(
+        const TextTheme(
+          displayLarge: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+          displayMedium: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+          titleLarge: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+          bodyLarge: TextStyle(color: textColor),
+          bodyMedium: TextStyle(color: textColor),
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

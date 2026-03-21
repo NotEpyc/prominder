@@ -50,13 +50,13 @@ class _NeumorphicButtonState extends State<NeumorphicButton> {
                   : [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.15),
-                      offset: const Offset(18, 18),
-                      blurRadius: 30,
+                      offset: const Offset(5, 5),
+                      blurRadius: 10,
                     ),
                     const BoxShadow(
                       color: AppTheme.buttonHighlightColor,
-                      offset: Offset(-18, -18),
-                      blurRadius: 30,
+                      offset: Offset(-5, -5),
+                      blurRadius: 10,
                     ),
                   ],
         ),

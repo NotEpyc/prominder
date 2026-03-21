@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/services/timetable_service.dart';
 
 class DashboardContent extends StatefulWidget {
   /// Whether the search bar (owned by the parent) is currently active.
   final bool searchActive;
+
   /// Called when the user triggers a back-press while search is active.
   final VoidCallback? onDismissSearch;
 
@@ -18,9 +20,41 @@ class DashboardContent extends StatefulWidget {
 }
 
 class _DashboardContentState extends State<DashboardContent> {
-  // Agenda state
-  final bool _isMathDone = false;
-  final bool _isPhysicsDone = true;
+  bool _isLoading = true;
+  List<TimetableEntry> _entries = [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTimetable();
+  }
+
+  Future<void> _fetchTimetable() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final entries = await TimetableService.fetchEntries();
+      // Sort to make sure upcoming events are first
+      entries.sort((a, b) => a.start.compareTo(b.start));
+      if (mounted) {
+        setState(() {
+          _entries = entries;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,9 +69,10 @@ class _DashboardContentState extends State<DashboardContent> {
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: SingleChildScrollView(
             // Locked while search is active
-            physics: widget.searchActive
-                ? const NeverScrollableScrollPhysics()
-                : const BouncingScrollPhysics(),
+            physics:
+                widget.searchActive
+                    ? const NeverScrollableScrollPhysics()
+                    : const BouncingScrollPhysics(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -65,9 +100,6 @@ class _DashboardContentState extends State<DashboardContent> {
       ),
     );
   }
-
-
-
 
   Widget _buildQuickStats() {
     return Row(
@@ -129,44 +161,90 @@ class _DashboardContentState extends State<DashboardContent> {
     );
   }
 
+  String _formatTime(DateTime time) {
+    int hour = time.hour;
+    final int minute = time.minute;
+    final String period = hour >= 12 ? 'PM' : 'AM';
+    if (hour == 0) hour = 12;
+    if (hour > 12) hour -= 12;
+    final h = hour.toString().padLeft(2, '0');
+    final m = minute.toString().padLeft(2, '0');
+    return '$h:$m $period';
+  }
+
   Widget _buildUpNextCard() {
+    if (_isLoading) {
+      return _buildRaisedCard(
+        padding: const EdgeInsets.all(24),
+        child: const Center(
+          child: CircularProgressIndicator(color: AppTheme.primaryColor),
+        ),
+      );
+    }
+    
+    // Find next pending task
+    final pendingEntries = _entries.where((e) => !e.done).toList();
+    
+    if (pendingEntries.isEmpty) {
+      return _buildRaisedCard(
+        padding: const EdgeInsets.all(24),
+        child: const Center(
+          child: Text(
+            "Nothing's Up Next!",
+            style: TextStyle(
+              color: AppTheme.textColor,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final upNext = pendingEntries.first;
+    final startStr = _formatTime(upNext.start);
+    final endStr = _formatTime(upNext.end);
+    final duration = upNext.end.difference(upNext.start).inMinutes;
+
     return _buildRaisedCard(
       padding: const EdgeInsets.all(24),
       child: Stack(
         children: [
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 "UP NEXT",
                 style: TextStyle(
                   color: AppTheme.lightGreen,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2.0,
                 ),
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               Text(
-                "Linear Algebra",
-                style: TextStyle(
+                upNext.topic.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
                   color: AppTheme.textColor,
                   fontSize: 26,
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Row(
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.schedule_rounded,
                     size: 16,
                     color: AppTheme.descriptionTextColor,
                   ),
-                  SizedBox(width: 6),
+                  const SizedBox(width: 6),
                   Text(
-                    "10:00 AM - 11:30 AM (90m)",
-                    style: TextStyle(
+                    "$startStr - $endStr (${duration}m)",
+                    style: const TextStyle(
                       color: AppTheme.descriptionTextColor,
                       fontSize: 14,
                     ),
@@ -426,31 +504,46 @@ class _DashboardContentState extends State<DashboardContent> {
                   horizontal: 16.0,
                 ),
                 child: Column(
-                  children: [
-                    _buildAgendaItem(
-                      "Physics Revision",
-                      "09:00 AM",
-                      _isPhysicsDone,
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Divider(
-                        color: AppTheme.lightGreen,
-                        height: 24,
-                        thickness: 0.5,
-                      ),
-                    ),
-                    _buildAgendaItem("Linear Algebra", "10:00 AM", _isMathDone),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Divider(
-                        color: AppTheme.lightGreen,
-                        height: 24,
-                        thickness: 0.5,
-                      ),
-                    ),
-                    _buildAgendaItem("Chemistry Intro", "02:00 PM", false),
-                  ],
+                  children: _isLoading
+                      ? [const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor))]
+                      : _error != null
+                          ? [
+                              Center(
+                                child: Text(
+                                  _error!,
+                                  style: const TextStyle(color: AppTheme.highlightColor),
+                                  textAlign: TextAlign.center,
+                                ),
+                              )
+                            ]
+                          : _entries.isEmpty
+                              ? [
+                                  const Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 24.0),
+                                      child: Text(
+                                        "No tasks scheduled.",
+                                        style: TextStyle(color: AppTheme.descriptionTextColor),
+                                      ),
+                                    ),
+                                  )
+                                ]
+                              : _entries.expand((entry) {
+                                  final isLast = entry == _entries.last;
+                                  final timeStr = _formatTime(entry.start);
+                                  return [
+                                    _buildAgendaItem(entry.topic.name, timeStr, entry.done),
+                                    if (!isLast)
+                                      const Padding(
+                                        padding: EdgeInsets.symmetric(horizontal: 16.0),
+                                        child: Divider(
+                                          color: AppTheme.lightGreen,
+                                          height: 24,
+                                          thickness: 0.5,
+                                        ),
+                                      ),
+                                  ];
+                                }).toList(),
                 ),
               ),
             ),
@@ -632,5 +725,3 @@ class _DashboardInnerShadowPainter extends CustomPainter {
         oldDelegate.shadows != shadows;
   }
 }
-
-

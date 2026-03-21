@@ -27,8 +27,9 @@ class _FloatingBottomNavbarState extends State<FloatingBottomNavbar>
   final List<NavItem> _navItems = [
     NavItem(icon: Icons.home_rounded, index: 0),
     NavItem(icon: Icons.bubble_chart_rounded, index: 1),
-    NavItem(icon: Icons.style_rounded, index: 2),
-    NavItem(icon: Icons.person_rounded, index: 3),
+    NavItem(icon: Icons.calendar_month_rounded, index: 2),
+    NavItem(icon: Icons.style_rounded, index: 3),
+    NavItem(icon: Icons.person_rounded, index: 4),
   ];
 
   @override
@@ -174,7 +175,8 @@ class _FloatingBottomNavbarState extends State<FloatingBottomNavbar>
                                             milliseconds: 300,
                                           ),
                                           curve: Curves.easeInOutCubic,
-                                          padding: const EdgeInsets.all(8.0),
+                                          width: 44,
+                                          height: 44,
                                           decoration: BoxDecoration(
                                             color:
                                                 isSelected

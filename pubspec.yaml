@@ -1,8 +1,6 @@
 name: prominder
-description: "A new Flutter project."
-# The following line prevents the package from being accidentally published to
-# pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+description: "AI-Driven Productivity & Focus Platform"
+publish_to: 'none'
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -44,6 +42,10 @@ dependencies:
   speech_to_text: ^7.0.0
   flutter_markdown: ^0.7.7+1
   markdown_widget: ^2.3.2+8
+  image_picker: ^1.2.0
+  file_picker: ^10.3.10
+  open_filex: ^4.7.0
+  google_fonts: ^6.3.2
 
 dev_dependencies:
   flutter_test:
