@@ -5,7 +5,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter/material.dart';
@@ -117,10 +116,7 @@ class _MobileRegisterScreenState extends State<MobileRegisterScreen> {
     });
 
     try {
-      final baseUrl = dotenv.env['API_BASE_URL'];
-      if (baseUrl == null) {
-        throw Exception('API_BASE_URL is not set in .env file');
-      }
+      const baseUrl = 'https://prominder.up.railway.app';
 
       final response = await http.post(
         Uri.parse('$baseUrl/api/auth/register/'),
@@ -157,12 +153,18 @@ class _MobileRegisterScreenState extends State<MobileRegisterScreen> {
           if (tokenData['refresh'] != null) {
             await prefs.setString('refresh_token', tokenData['refresh']);
           }
-        }
-
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const MobileHomeScreen()),
-          );
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const MobileHomeScreen()),
+            );
+          }
+        } else {
+          // If auto login fails for some reason despite successful registration, route to login screen
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const MobileLoginScreen()),
+            );
+          }
         }
       } else {
         if (mounted) {

@@ -58,8 +58,7 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
 
   final List<_ChatMessage> _messages = [
     _ChatMessage(
-      text:
-          'Hi! I\'m your AI study assistant. Ask me anything about '
+      text: 'Hi! I\'m your AI study assistant. Ask me anything about '
           'your schedule, subjects, or study tips.',
       isUser: false,
     ),
@@ -69,7 +68,8 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
   void initState() {
     super.initState();
     _inputController.addListener(() {
-      setState(() => _hasText = _inputController.text.trim().isNotEmpty || _stagedFile != null);
+      setState(() => _hasText =
+          _inputController.text.trim().isNotEmpty || _stagedFile != null);
     });
 
     if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
@@ -147,8 +147,7 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
       _messages.clear();
       _messages.add(
         _ChatMessage(
-          text:
-              'Hi! I\'m your AI study assistant. Ask me anything about '
+          text: 'Hi! I\'m your AI study assistant. Ask me anything about '
               'your schedule, subjects, or study tips.',
           isUser: false,
         ),
@@ -204,15 +203,13 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
       await _speech.stop();
       setState(() => _isListening = false);
     }
-    
+
     setState(() {
-      _messages.add(
-        _ChatMessage(
-          text: text, 
-          isUser: true,
-          attachedFilePath: fileToSend?.path,
-        )
-      );
+      _messages.add(_ChatMessage(
+        text: text,
+        isUser: true,
+        attachedFilePath: fileToSend?.path,
+      ));
       _isBotTyping = true;
       _stagedFile = null;
       _hasText = false;
@@ -303,7 +300,7 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
           children: [
             // ── Layer 0: Parallax background ──────────────────────────────
             ParallaxBackground(
-              scrollOffset: 0,
+              scrollController: _scrollController,
               overscrollAllowance: overscrollAllowance,
               screenHeight: screenHeight,
             ),
@@ -321,25 +318,24 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
 
                     // Message list
                     Expanded(
-                      child:
-                          _isLoadingMessages
-                              ? const GlobalLoader(transparentBg: true)
-                              : ListView.builder(
-                                controller: _scrollController,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 12,
-                                ),
-                                // Extra item when bot is typing
-                                itemCount:
-                                    _messages.length + (_isBotTyping ? 1 : 0),
-                                itemBuilder: (_, i) {
-                                  if (_isBotTyping && i == _messages.length) {
-                                    return _buildTypingIndicator();
-                                  }
-                                  return _buildBubble(_messages[i]);
-                                },
+                      child: _isLoadingMessages
+                          ? const GlobalLoader(transparentBg: true)
+                          : ListView.builder(
+                              controller: _scrollController,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
                               ),
+                              // Extra item when bot is typing
+                              itemCount:
+                                  _messages.length + (_isBotTyping ? 1 : 0),
+                              itemBuilder: (_, i) {
+                                if (_isBotTyping && i == _messages.length) {
+                                  return _buildTypingIndicator();
+                                }
+                                return _buildBubble(_messages[i]);
+                              },
+                            ),
                     ),
 
                     // Input bar
@@ -371,7 +367,7 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
         children: [
           // Side-menu
           _NeumorphicIconButton(
-            icon: Icons.menu_rounded,
+            icon: Image.asset('assets/icons/menu.png', width: 24, height: 24),
             onTap: () {
               FocusScope.of(context).unfocus();
               _scaffoldKey.currentState?.openDrawer();
@@ -431,7 +427,7 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                   const SizedBox(height: 12),
                   // ── Core Actions ──
                   _buildSidebarItem(
-                    icon: Icons.edit_square,
+                    iconWidget: Image.asset('assets/icons/edit.png', width: 22, height: 22),
                     label: 'New chat',
                     isActive: false,
                     onTap: () => _startNewConversation(fromDrawer: true),
@@ -466,9 +462,8 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                         ),
                         child: TextField(
                           controller: _sidebarSearchController,
-                          onChanged:
-                              (val) =>
-                                  setState(() => _sidebarSearchQuery = val),
+                          onChanged: (val) =>
+                              setState(() => _sidebarSearchQuery = val),
                           style: const TextStyle(
                             fontSize: 14,
                             color: AppTheme.textColor,
@@ -481,10 +476,13 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                               ),
                               fontSize: 13,
                             ),
-                            prefixIcon: const Icon(
-                              Icons.search_rounded,
-                              size: 18,
-                              color: AppTheme.descriptionTextColor,
+                            prefixIcon: Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Image.asset(
+                                'assets/icons/search.png',
+                                width: 20,
+                                height: 20,
+                              ),
                             ),
                             border: InputBorder.none,
                             contentPadding: const EdgeInsets.symmetric(
@@ -553,14 +551,13 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
       ];
     }
 
-    final filteredHistory =
-        _history
-            .where(
-              (c) => c.title.toLowerCase().contains(
+    final filteredHistory = _history
+        .where(
+          (c) => c.title.toLowerCase().contains(
                 _sidebarSearchQuery.toLowerCase(),
               ),
-            )
-            .toList();
+        )
+        .toList();
 
     if (filteredHistory.isEmpty) {
       return [
@@ -580,7 +577,7 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
     return filteredHistory.map((thread) {
       final isCurrent = thread.id == _conversationId;
       return _buildSidebarItem(
-        icon: Icons.chat_bubble_outline_rounded,
+        iconWidget: Image.asset('assets/icons/message.png', width: 20, height: 20),
         label: thread.title,
         isActive: isCurrent,
         onTap: () => _openConversation(thread),
@@ -589,7 +586,7 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
   }
 
   Widget _buildSidebarItem({
-    required IconData icon,
+    required Widget iconWidget,
     required String label,
     required bool isActive,
     required VoidCallback onTap,
@@ -603,57 +600,48 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: CustomPaint(
-          painter:
-              isActive
-                  ? _InnerShadowPainter(
-                    borderRadius: radius,
-                    shadows: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.12),
-                        offset: const Offset(2, 2),
-                        blurRadius: 4,
-                      ),
-                      const BoxShadow(
-                        color: AppTheme.buttonHighlightColor,
-                        offset: Offset(-2, -2),
-                        blurRadius: 4,
-                      ),
-                    ],
-                  )
-                  : null,
+          painter: isActive
+              ? _InnerShadowPainter(
+                  borderRadius: radius,
+                  shadows: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      offset: const Offset(2, 2),
+                      blurRadius: 4,
+                    ),
+                    const BoxShadow(
+                      color: AppTheme.buttonHighlightColor,
+                      offset: Offset(-2, -2),
+                      blurRadius: 4,
+                    ),
+                  ],
+                )
+              : null,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: AppTheme.backgroundColor,
               borderRadius: BorderRadius.circular(radius),
-              boxShadow:
-                  isActive
-                      ? null
-                      : [
-                        // Bottom-right shadow (outward elevate)
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          offset: const Offset(4, 4),
-                          blurRadius: 8,
-                        ),
-                        // Top-left highlight (elevation)
-                        const BoxShadow(
-                          color: AppTheme.buttonHighlightColor,
-                          offset: Offset(-4, -4),
-                          blurRadius: 8,
-                        ),
-                      ],
+              boxShadow: isActive
+                  ? null
+                  : [
+                      // Bottom-right shadow (outward elevate)
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        offset: const Offset(4, 4),
+                        blurRadius: 8,
+                      ),
+                      // Top-left highlight (elevation)
+                      const BoxShadow(
+                        color: AppTheme.buttonHighlightColor,
+                        offset: Offset(-4, -4),
+                        blurRadius: 8,
+                      ),
+                    ],
             ),
             child: Row(
               children: [
-                Icon(
-                  icon,
-                  size: 18,
-                  color:
-                      isActive
-                          ? AppTheme.primaryColor
-                          : AppTheme.descriptionTextColor,
-                ),
+                iconWidget,
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
@@ -702,8 +690,8 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
   Widget _buildAttachmentPreview(String filePath) {
     final lowerPath = filePath.toLowerCase();
     final isImage = lowerPath.endsWith('.jpg') ||
-                    lowerPath.endsWith('.jpeg') ||
-                    lowerPath.endsWith('.png');
+        lowerPath.endsWith('.jpeg') ||
+        lowerPath.endsWith('.png');
     final fileName = filePath.split('\\').last.split('/').last;
 
     return GestureDetector(
@@ -775,7 +763,8 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
             : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.insert_drive_file_rounded, color: AppTheme.primaryColor, size: 24),
+                  const Icon(Icons.insert_drive_file_rounded,
+                      color: AppTheme.primaryColor, size: 24),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
@@ -825,11 +814,11 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                   ),
                 ],
               ),
-              child: const Center(
-                child: Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 16,
-                  color: AppTheme.primaryColor,
+              child: Center(
+                child: Image.asset(
+                  'assets/icons/robot.png',
+                  width: 20,
+                  height: 20,
                 ),
               ),
             ),
@@ -845,36 +834,35 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                   bottomLeft: Radius.circular(msg.isUser ? 20 : 4),
                   bottomRight: Radius.circular(msg.isUser ? 4 : 20),
                 ),
-                boxShadow:
-                    msg.isUser
-                        ? [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            offset: const Offset(4, 4),
-                            blurRadius: 10,
-                            spreadRadius: -1,
-                          ),
-                          const BoxShadow(
-                            color: AppTheme.buttonHighlightColor,
-                            offset: Offset(-4, -4),
-                            blurRadius: 10,
-                            spreadRadius: -1,
-                          ),
-                        ]
-                        : [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.10),
-                            offset: const Offset(3, 3),
-                            blurRadius: 8,
-                            spreadRadius: -1,
-                          ),
-                          const BoxShadow(
-                            color: AppTheme.buttonHighlightColor,
-                            offset: Offset(-3, -3),
-                            blurRadius: 8,
-                            spreadRadius: -1,
-                          ),
-                        ],
+                boxShadow: msg.isUser
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          offset: const Offset(4, 4),
+                          blurRadius: 10,
+                          spreadRadius: -1,
+                        ),
+                        const BoxShadow(
+                          color: AppTheme.buttonHighlightColor,
+                          offset: Offset(-4, -4),
+                          blurRadius: 10,
+                          spreadRadius: -1,
+                        ),
+                      ]
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.10),
+                          offset: const Offset(3, 3),
+                          blurRadius: 8,
+                          spreadRadius: -1,
+                        ),
+                        const BoxShadow(
+                          color: AppTheme.buttonHighlightColor,
+                          offset: Offset(-3, -3),
+                          blurRadius: 8,
+                          spreadRadius: -1,
+                        ),
+                      ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -887,107 +875,131 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                       config: MarkdownConfig(
                         configs: [
                           PConfig(
-                      textStyle: TextStyle(
-                        color:
-                            msg.isError
-                                ? AppTheme.highlightColor
-                                : msg.isUser
-                                ? AppTheme.primaryColor
-                                : AppTheme.textColor,
-                        fontSize: 15,
-                        fontWeight:
-                            msg.isUser ? FontWeight.w600 : FontWeight.normal,
-                        height: 1.5,
-                      ),
-                    ),
-                    ListConfig(
-                      marginLeft: 16,
-                      marker: (isOrdered, depth, index) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6, top: 4),
-                          child:
-                              isOrdered
-                                  ? Text(
-                                    '${index + 1}.',
-                                    style: TextStyle(
-                                      color:
-                                          msg.isUser
-                                              ? AppTheme.primaryColor
-                                              : AppTheme.textColor,
-                                      fontSize: 15,
-                                      height: 1.5,
-                                    ),
-                                  )
-                                  : Container(
-                                    width: 5,
-                                    height: 5,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          msg.isUser
-                                              ? AppTheme.primaryColor
-                                              : AppTheme.textColor,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                        );
-                      },
-                    ),
-                    H1Config(
-                      style: TextStyle(
-                        color:
-                            msg.isUser
-                                ? AppTheme.primaryColor
-                                : AppTheme.textColor,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    H2Config(
-                      style: TextStyle(
-                        color:
-                            msg.isUser
-                                ? AppTheme.primaryColor
-                                : AppTheme.textColor,
-                        fontSize: 19,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    H3Config(
-                      style: TextStyle(
-                        color:
-                            msg.isUser
-                                ? AppTheme.primaryColor
-                                : AppTheme.textColor,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    TableConfig(
-                      wrapper:
-                          (table) => Container(
-                            margin: const EdgeInsets.symmetric(vertical: 8),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: AppTheme.descriptionTextColor.withValues(
-                                  alpha: 0.2,
-                                ),
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: table,
+                            textStyle: TextStyle(
+                              color: msg.isError
+                                  ? AppTheme.highlightColor
+                                  : msg.isUser
+                                      ? AppTheme.primaryColor
+                                      : AppTheme.textColor,
+                              fontSize: 15,
+                              fontWeight: msg.isUser
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              height: 1.5,
                             ),
                           ),
+                          ListConfig(
+                            marginLeft: 16,
+                            marker: (isOrdered, depth, index) {
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.only(right: 6, top: 4),
+                                child: isOrdered
+                                    ? Text(
+                                        '${index + 1}.',
+                                        style: TextStyle(
+                                          color: msg.isUser
+                                              ? AppTheme.primaryColor
+                                              : AppTheme.textColor,
+                                          fontSize: 15,
+                                          height: 1.5,
+                                        ),
+                                      )
+                                    : Container(
+                                        width: 5,
+                                        height: 5,
+                                        decoration: BoxDecoration(
+                                          color: msg.isUser
+                                              ? AppTheme.primaryColor
+                                              : AppTheme.textColor,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                              );
+                            },
+                          ),
+                          H1Config(
+                            style: TextStyle(
+                              color: msg.isUser
+                                  ? AppTheme.primaryColor
+                                  : AppTheme.textColor,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          H2Config(
+                            style: TextStyle(
+                              color: msg.isUser
+                                  ? AppTheme.primaryColor
+                                  : AppTheme.textColor,
+                              fontSize: 19,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          H3Config(
+                            style: TextStyle(
+                              color: msg.isUser
+                                  ? AppTheme.primaryColor
+                                  : AppTheme.textColor,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          TableConfig(
+                            wrapper: (table) => Container(
+                              margin: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color:
+                                      AppTheme.descriptionTextColor.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: table,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
+                ],
+              ),
+            ),
+          ),
+          if (msg.isUser) ...[
+            Container(
+              width: 32,
+              height: 32,
+              margin: const EdgeInsets.only(left: 8, bottom: 2),
+              decoration: BoxDecoration(
+                color: AppTheme.backgroundColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    offset: const Offset(3, 3),
+                    blurRadius: 6,
+                  ),
+                  const BoxShadow(
+                    color: AppTheme.buttonHighlightColor,
+                    offset: Offset(-3, -3),
+                    blurRadius: 6,
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Image.asset(
+                  'assets/icons/user.png',
+                  width: 18,
+                  height: 18,
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-          if (msg.isUser) const SizedBox(width: 8),
+            ),
+          ],
         ],
       ),
     );
@@ -1022,11 +1034,11 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                 ),
               ],
             ),
-            child: const Center(
-              child: Icon(
-                Icons.auto_awesome_rounded,
-                size: 16,
-                color: AppTheme.primaryColor,
+            child: Center(
+              child: Image.asset(
+                'assets/icons/robot.png',
+                width: 20,
+                height: 20,
               ),
             ),
           ),
@@ -1076,129 +1088,122 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
         children: [
           if (_stagedFile != null) _buildStagedFilePreview(),
           Container(
-        decoration: BoxDecoration(
-          color: AppTheme.backgroundColor,
-          borderRadius: BorderRadius.circular(28),
-        ),
-        child: CustomPaint(
-          painter: _InnerShadowPainter(
-            borderRadius: 28,
-            shadows: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.22),
-                offset: const Offset(4, 4),
-                blurRadius: 3,
-                spreadRadius: -1,
-              ),
-              const BoxShadow(
-                color: AppTheme.buttonHighlightColor,
-                offset: Offset(-4, -4),
-                blurRadius: 3,
-                spreadRadius: -1,
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // ── Plus / attach icon ──────────────────────────────────
-                GestureDetector(
-                  onTap: _showAttachOptions,
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 4, 8),
-                    child: Icon(
-                      Icons.add_rounded,
-                      color: AppTheme.primaryColor,
-                      size: 24,
-                    ),
+            decoration: BoxDecoration(
+              color: AppTheme.backgroundColor,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: CustomPaint(
+              painter: _InnerShadowPainter(
+                borderRadius: 28,
+                shadows: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.22),
+                    offset: const Offset(4, 4),
+                    blurRadius: 3,
+                    spreadRadius: -1,
                   ),
-                ),
-
-                // ── Text field ─────────────────────────────────────────
-                Expanded(
-                  child: TextField(
-                    controller: _inputController,
-                    focusNode: _inputFocusNode,
-                    minLines: 1,
-                    maxLines: 5,
-                    onSubmitted: (_) => _sendMessage(),
-                    style: const TextStyle(
-                      color: AppTheme.textColor,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 15,
-                      height: 1.4,
-                    ),
-                    decoration: const InputDecoration(
-                      hintText: 'Ask anything...',
-                      hintStyle: TextStyle(
-                        color: AppTheme.descriptionTextColor,
-                        fontWeight: FontWeight.normal,
-                        fontSize: 15,
-                      ),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 10,
+                  const BoxShadow(
+                    color: AppTheme.buttonHighlightColor,
+                    offset: Offset(-4, -4),
+                    blurRadius: 3,
+                    spreadRadius: -1,
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // ── Plus / attach icon ──────────────────────────────────
+                    GestureDetector(
+                      onTap: _showAttachOptions,
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 4, 8),
+                        child: Image.asset(
+                          'assets/icons/plus.png',
+                          width: 26,
+                          height: 26,
+                        ),
                       ),
                     ),
-                  ),
-                ),
 
-                // ── Mic  ↔  Send arrow (AnimatedSwitcher) ─────────────
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  transitionBuilder:
-                      (child, anim) =>
+                    // ── Text field ─────────────────────────────────────────
+                    Expanded(
+                      child: TextField(
+                        controller: _inputController,
+                        focusNode: _inputFocusNode,
+                        minLines: 1,
+                        maxLines: 5,
+                        onSubmitted: (_) => _sendMessage(),
+                        style: const TextStyle(
+                          color: AppTheme.textColor,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 15,
+                          height: 1.4,
+                        ),
+                        decoration: const InputDecoration(
+                          hintText: 'Ask anything...',
+                          hintStyle: TextStyle(
+                            color: AppTheme.descriptionTextColor,
+                            fontWeight: FontWeight.normal,
+                            fontSize: 15,
+                          ),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 10,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // ── Mic  ↔  Send arrow (AnimatedSwitcher) ─────────────
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      transitionBuilder: (child, anim) =>
                           ScaleTransition(scale: anim, child: child),
-                  child:
-                      _hasText
+                      child: _hasText
                           // ── Send arrow ──────────────────────────────────
                           ? GestureDetector(
-                            key: const ValueKey('send'),
-                            onTap: _sendMessage,
-                            behavior: HitTestBehavior.opaque,
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(4, 8, 10, 8),
-                              child: Icon(
-                                Icons.arrow_upward_rounded,
-                                color: AppTheme.primaryColor,
-                                size: 24,
+                              key: const ValueKey('send'),
+                              onTap: _sendMessage,
+                              behavior: HitTestBehavior.opaque,
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(4, 8, 10, 8),
+                                child: Image.asset(
+                                  'assets/icons/right_arrow.png',
+                                  width: 26,
+                                  height: 26,
+                                ),
                               ),
-                            ),
-                          )
+                            )
                           // ── Mic ─────────────────────────────────────────
                           : GestureDetector(
-                            key: const ValueKey('mic'),
-                            onTap: _toggleListening,
-                            behavior: HitTestBehavior.opaque,
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(4, 8, 10, 8),
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 200),
-                                child: Icon(
-                                  _isListening
-                                      ? Icons.mic_rounded
-                                      : Icons.mic_none_rounded,
-                                  key: ValueKey(_isListening),
-                                  color:
-                                      _isListening
-                                          ? AppTheme.lightGreen
-                                          : AppTheme.descriptionTextColor,
-                                  size: 24,
+                              key: const ValueKey('mic'),
+                              onTap: _toggleListening,
+                              behavior: HitTestBehavior.opaque,
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(4, 8, 10, 8),
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 200),
+                                  child: Image.asset(
+                                    'assets/icons/microphone.png',
+                                    key: ValueKey(_isListening),
+                                    width: 26,
+                                    height: 26,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-        ),
         ],
       ),
     );
@@ -1206,47 +1211,52 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
 
   Widget _buildStagedFilePreview() {
     final isImage = _stagedFile!.path.toLowerCase().endsWith('.jpg') ||
-                    _stagedFile!.path.toLowerCase().endsWith('.jpeg') ||
-                    _stagedFile!.path.toLowerCase().endsWith('.png');
+        _stagedFile!.path.toLowerCase().endsWith('.jpeg') ||
+        _stagedFile!.path.toLowerCase().endsWith('.png');
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: AppTheme.backgroundColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            offset: const Offset(2, 2),
-            blurRadius: 4,
-          ),
-          const BoxShadow(
-            color: AppTheme.buttonHighlightColor,
-            offset: Offset(-2, -2),
-            blurRadius: 4,
-          ),
-        ]
-      ),
+          color: AppTheme.backgroundColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              offset: const Offset(2, 2),
+              blurRadius: 4,
+            ),
+            const BoxShadow(
+              color: AppTheme.buttonHighlightColor,
+              offset: Offset(-2, -2),
+              blurRadius: 4,
+            ),
+          ]),
       child: Row(
         children: [
           if (isImage)
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.file(_stagedFile!, width: 44, height: 44, fit: BoxFit.cover),
+              child: Image.file(_stagedFile!,
+                  width: 44, height: 44, fit: BoxFit.cover),
             )
           else
-            const Icon(Icons.insert_drive_file_rounded, color: AppTheme.primaryColor, size: 40),
+            const Icon(Icons.insert_drive_file_rounded,
+                color: AppTheme.primaryColor, size: 40),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               _stagedFile!.path.split('\\').last.split('/').last,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppTheme.textColor),
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: AppTheme.textColor),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close_rounded, color: AppTheme.descriptionTextColor),
+            icon: const Icon(Icons.close_rounded,
+                color: AppTheme.descriptionTextColor),
             onPressed: () {
               setState(() {
                 _stagedFile = null;
@@ -1258,7 +1268,6 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
       ),
     );
   }
-
 
   Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
@@ -1407,7 +1416,7 @@ class _ChatMessage {
 // ── Reusable neumorphic widgets ────────────────────────────────────────────
 
 class _NeumorphicIconButton extends StatelessWidget {
-  final IconData icon;
+  final Widget icon;
   final VoidCallback onTap;
 
   const _NeumorphicIconButton({required this.icon, required this.onTap});
@@ -1437,7 +1446,7 @@ class _NeumorphicIconButton extends StatelessWidget {
             ),
           ],
         ),
-        child: Icon(icon, color: AppTheme.textColor, size: 22),
+        child: Center(child: icon),
       ),
     );
   }
@@ -1510,17 +1519,16 @@ class _InnerShadowPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final boundsPath =
-        Path()..addRRect(
-          RRect.fromRectAndRadius(rect, Radius.circular(borderRadius)),
-        );
+    final boundsPath = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(rect, Radius.circular(borderRadius)),
+      );
     canvas.clipPath(boundsPath);
 
     for (final shadow in shadows) {
-      final paint =
-          Paint()
-            ..color = shadow.color
-            ..maskFilter = MaskFilter.blur(BlurStyle.normal, shadow.blurRadius);
+      final paint = Paint()
+        ..color = shadow.color
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, shadow.blurRadius);
       final holeRect = rect.shift(shadow.offset).inflate(shadow.spreadRadius);
       final path = Path()..addRect(rect.inflate(shadow.blurRadius * 5));
       path.addRRect(

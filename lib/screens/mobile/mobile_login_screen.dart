@@ -6,7 +6,6 @@ import 'package:video_player/video_player.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
@@ -111,10 +110,7 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
     });
 
     try {
-      final baseUrl = dotenv.env['API_BASE_URL'];
-      if (baseUrl == null) {
-        throw Exception('API_BASE_URL is not set in .env file');
-      }
+      const baseUrl = 'https://prominder.up.railway.app';
 
       final response = await http.post(
         Uri.parse('$baseUrl/api/auth/token/'),

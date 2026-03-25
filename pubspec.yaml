@@ -17,7 +17,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.7.0-323.0.dev
+  sdk: '>=3.4.0 <4.0.0'
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -45,7 +45,8 @@ dependencies:
   image_picker: ^1.2.0
   file_picker: ^10.3.10
   open_filex: ^4.7.0
-  google_fonts: ^6.3.2
+  google_fonts: ^6.2.1
+  flutter_svg: ^2.0.10
 
 dev_dependencies:
   flutter_test:
@@ -73,7 +74,6 @@ flutter:
     - assets/videos/
     - assets/icons/
     - assets/images/home/
-    - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

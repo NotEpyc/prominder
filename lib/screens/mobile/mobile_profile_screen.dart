@@ -27,16 +27,10 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
   UserProfile? _userProfile;
   String? _error;
   final ScrollController _scrollController = ScrollController();
-  double _scrollOffset = 0.0;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(() {
-      setState(() {
-        _scrollOffset = _scrollController.offset;
-      });
-    });
     _fetchProfile();
   }
 
@@ -95,74 +89,77 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
           children: [
             // Layer 0: Parallax background (dynamic)
             ParallaxBackground(
-              scrollOffset: _scrollOffset,
+              scrollController: _scrollController,
               overscrollAllowance: overscrollAllowance,
               screenHeight: screenHeight,
             ),
-            
+
             if (_isLoading && _userProfile == null)
               const GlobalLoader()
             else
               SafeArea(
                 child: SingleChildScrollView(
-                        controller: _scrollController,
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(24.0, 48.0, 24.0, 24.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                          if (_error != null) ...[
-                            Text(
-                              _error!,
-                              style: const TextStyle(color: AppTheme.highlightColor),
-                              textAlign: TextAlign.center,
+                  controller: _scrollController,
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(24.0, 48.0, 24.0, 24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_error != null) ...[
+                        Text(
+                          _error!,
+                          style:
+                              const TextStyle(color: AppTheme.highlightColor),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        Center(
+                          child: NeumorphicButton(
+                            onPressed: _fetchProfile,
+                            child: const Text(
+                              'Retry',
+                              style: TextStyle(color: AppTheme.buttonTextColor),
                             ),
-                            const SizedBox(height: 24),
-                            Center(
-                              child: NeumorphicButton(
-                                onPressed: _fetchProfile,
-                                child: const Text(
-                                  'Retry',
-                                  style: TextStyle(color: AppTheme.buttonTextColor),
-                                ),
-                              ),
-                            ),
-                          ] else if (_userProfile != null) ...[
-                            _buildProfileCard(context),
-                            const SizedBox(height: 36),
-                            _buildInspirationStats(),
-                            const SizedBox(height: 36),
-                            SizedBox(
-                              width: double.infinity,
-                              child: NeumorphicButton(
-                                onPressed: _handleLogout,
-                                child: const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 4.0),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.logout, color: AppTheme.buttonTextColor),
-                                      SizedBox(width: 12),
-                                      Text(
-                                        'Logout',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppTheme.buttonTextColor,
-                                        ),
-                                      ),
-                                    ],
+                          ),
+                        ),
+                      ] else if (_userProfile != null) ...[
+                        _buildProfileCard(context),
+                        const SizedBox(height: 36),
+                        _buildInspirationStats(),
+                        const SizedBox(height: 36),
+                        SizedBox(
+                          width: double.infinity,
+                          child: NeumorphicButton(
+                            onPressed: _handleLogout,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 2.0),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Image.asset('assets/icons/logout.png',
+                                      width: 26, height: 26),
+                                  const SizedBox(width: 12),
+                                  const Text(
+                                    'Logout',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.buttonTextColor,
+                                    ),
                                   ),
-                                ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 100), // bottom nav spacing
-                          ],
-                        ],
-                      ),
-                    ),
-            ),
-            
+                          ),
+                        ),
+                        const SizedBox(height: 100), // bottom nav spacing
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
             // Top-right Settings Button
             SafeArea(
               child: Align(
@@ -189,11 +186,13 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
                       ],
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.settings, color: AppTheme.primaryColor),
+                      icon: Image.asset('assets/icons/settings.png',
+                          width: 34, height: 34),
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const MobileSettingsScreen()),
+                          MaterialPageRoute(
+                              builder: (_) => const MobileSettingsScreen()),
                         );
                       },
                     ),
@@ -201,7 +200,7 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
                 ),
               ),
             ),
-            
+
             // Floating Navbar
             FloatingBottomNavbar(
               currentIndex: widget.initialNavIndex,
@@ -214,8 +213,20 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
   }
 
   String _getMonthYear(DateTime d) {
-    const months = ["january", "february", "march", "april", "may", "june",
-                    "july", "august", "september", "october", "november", "december"];
+    const months = [
+      "january",
+      "february",
+      "march",
+      "april",
+      "may",
+      "june",
+      "july",
+      "august",
+      "september",
+      "october",
+      "november",
+      "december"
+    ];
     return "${months[d.month - 1]}, ${d.year}";
   }
 
@@ -230,7 +241,15 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
   }
 
   String _getDayDate(DateTime d) {
-    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const days = [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday"
+    ];
     return "${days[d.weekday - 1]}, ${d.day}";
   }
 
@@ -341,29 +360,37 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
                     ],
                   ),
                 ),
-                
+
                 // decorative element - left side stars
                 Positioned(
                   left: 20,
                   top: 100,
-                  child: Icon(Icons.auto_awesome, color: AppTheme.lightGreen.withValues(alpha: 0.3), size: 30),
+                  child: Icon(Icons.auto_awesome,
+                      color: AppTheme.lightGreen.withValues(alpha: 0.3),
+                      size: 30),
                 ),
                 Positioned(
                   left: 50,
                   top: 140,
-                  child: Icon(Icons.auto_awesome, color: AppTheme.lightGreen.withValues(alpha: 0.2), size: 20),
+                  child: Icon(Icons.auto_awesome,
+                      color: AppTheme.lightGreen.withValues(alpha: 0.2),
+                      size: 20),
                 ),
 
                 // decorative element - right side stars
                 Positioned(
                   right: 20,
                   top: 130,
-                  child: Icon(Icons.auto_awesome, color: AppTheme.lightGreen.withValues(alpha: 0.3), size: 30),
+                  child: Icon(Icons.auto_awesome,
+                      color: AppTheme.lightGreen.withValues(alpha: 0.3),
+                      size: 30),
                 ),
                 Positioned(
                   right: 40,
                   top: 180,
-                  child: Icon(Icons.auto_awesome, color: AppTheme.lightGreen.withValues(alpha: 0.2), size: 20),
+                  child: Icon(Icons.auto_awesome,
+                      color: AppTheme.lightGreen.withValues(alpha: 0.2),
+                      size: 20),
                 ),
               ],
             ),
@@ -405,10 +432,12 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
                     width: 4,
                   ),
                 ),
-                child: const Icon(
-                  Icons.person,
-                  size: 50,
-                  color: AppTheme.backgroundColor,
+                child: Center(
+                  child: Image.asset(
+                    'assets/icons/user.png',
+                    width: 50,
+                    height: 50,
+                  ),
                 ),
                 // Since there is an avatar illustration in image 1, we can use an image if we have one.
                 // Using an Icon to make it reliable as placeholder.
@@ -459,7 +488,8 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
             children: [
               Expanded(
                 child: _buildStatItem(
-                  icon: Icons.chat_bubble_rounded,
+                  icon: Image.asset('assets/icons/message.png',
+                      width: 24, height: 24),
                   label: 'Queries Made',
                   value: '142',
                   color: AppTheme.primaryColor,
@@ -468,10 +498,12 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
               const SizedBox(width: 16),
               Expanded(
                 child: _buildStatItem(
-                  icon: Icons.military_tech_rounded,
+                  icon: const Icon(Icons.military_tech_rounded,
+                      color: AppTheme.highlightColor, size: 24),
                   label: 'Total Points',
                   value: '2,480',
-                  color: AppTheme.highlightColor, // using app theme highlight for pop
+                  color: AppTheme
+                      .highlightColor, // using app theme highlight for pop
                 ),
               ),
             ],
@@ -482,20 +514,20 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               // Inward shadow effect approximation via decoration
-               color: AppTheme.backgroundColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.10),
-                      offset: const Offset(4, 4),
-                      blurRadius: 8,
-                    ),
-                    const BoxShadow(
-                      color: AppTheme.buttonHighlightColor,
-                      offset: Offset(-4, -4),
-                      blurRadius: 8,
-                    ),
-                  ],
+              color: AppTheme.backgroundColor,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.10),
+                  offset: const Offset(4, 4),
+                  blurRadius: 8,
+                ),
+                const BoxShadow(
+                  color: AppTheme.buttonHighlightColor,
+                  offset: Offset(-4, -4),
+                  blurRadius: 8,
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -549,7 +581,7 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
   }
 
   Widget _buildStatItem({
-    required IconData icon,
+    required Widget icon,
     required String label,
     required String value,
     required Color color,
@@ -578,11 +610,7 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
               color: color.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 24,
-            ),
+            child: icon,
           ),
           const SizedBox(height: 16),
           Text(

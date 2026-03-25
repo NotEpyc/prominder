@@ -19,7 +19,6 @@ class MobileHomeScreen extends StatefulWidget {
 class _MobileHomeScreenState extends State<MobileHomeScreen> {
   // Scroll
   final ScrollController _scrollController = ScrollController();
-  double _scrollOffset = 0;
   int _currentNavIndex = 0;
 
   // Search — owned here so the search bar can live above the overlay in the Stack
@@ -34,9 +33,6 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(() {
-      setState(() => _scrollOffset = _scrollController.offset);
-    });
     _searchFocusNode.addListener(_onFocusChanged);
     _searchController.addListener(() {
       setState(() => _hasText = _searchController.text.trim().isNotEmpty);
@@ -129,7 +125,7 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
         children: [
           // ── Layer 0: Parallax background ──────────────────────────────────
           ParallaxBackground(
-            scrollOffset: _scrollOffset,
+            scrollController: _scrollController,
             overscrollAllowance: overscrollAllowance,
             screenHeight: screenHeight,
           ),
@@ -249,10 +245,13 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                 const SizedBox(width: 12),
                 GestureDetector(
                   onTap: () => _onSearchSubmitted(_searchController.text),
-                  child: const SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: CustomPaint(painter: _NeumorphicArrowPainter()),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 4.0),
+                    child: Image.asset(
+                      'assets/icons/right_arrow.png',
+                      width: 26,
+                      height: 26,
+                    ),
                   ),
                 ),
               ],
@@ -303,61 +302,4 @@ class _SearchBarInnerShadowPainter extends CustomPainter {
   bool shouldRepaint(covariant _SearchBarInnerShadowPainter oldDelegate) =>
       oldDelegate.borderRadius != borderRadius ||
       oldDelegate.shadows != shadows;
-}
-
-class _NeumorphicArrowPainter extends CustomPainter {
-  const _NeumorphicArrowPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final arrowW = size.width * 0.22;
-    final arrowH = size.height * 0.26;
-    const strokeW = 3.0;
-
-    final darkPaint =
-        Paint()
-          ..color = Colors.black.withValues(alpha: 0.28)
-          ..strokeWidth = strokeW
-          ..strokeCap = StrokeCap.round
-          ..style = PaintingStyle.stroke
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2);
-    _drawChevron(canvas, cx + 1.5, cy + 1.5, arrowW, arrowH, darkPaint);
-
-    final lightPaint =
-        Paint()
-          ..color = AppTheme.buttonHighlightColor.withValues(alpha: 0.75)
-          ..strokeWidth = strokeW
-          ..strokeCap = StrokeCap.round
-          ..style = PaintingStyle.stroke
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2);
-    _drawChevron(canvas, cx - 1.5, cy - 1.5, arrowW, arrowH, lightPaint);
-
-    final mainPaint =
-        Paint()
-          ..color = AppTheme.primaryColor
-          ..strokeWidth = strokeW
-          ..strokeCap = StrokeCap.round
-          ..style = PaintingStyle.stroke;
-    _drawChevron(canvas, cx, cy, arrowW, arrowH, mainPaint);
-  }
-
-  void _drawChevron(
-    Canvas canvas,
-    double cx,
-    double cy,
-    double w,
-    double h,
-    Paint paint,
-  ) {
-    final path = Path();
-    path.moveTo(cx - w, cy - h);
-    path.lineTo(cx + w, cy);
-    path.lineTo(cx - w, cy + h);
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

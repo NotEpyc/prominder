@@ -23,6 +23,13 @@ class _MobileTimetableScreenState extends State<MobileTimetableScreen> {
   bool _isLoading = true;
   List<TimetableEntry> _entries = [];
   String? _error;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -31,13 +38,24 @@ class _MobileTimetableScreenState extends State<MobileTimetableScreen> {
   }
 
   Future<void> _fetchEntries() async {
-    setState(() { _isLoading = true; _error = null; });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
     try {
       final entries = await TimetableService.fetchEntries();
       entries.sort((a, b) => a.start.compareTo(b.start));
-      if (mounted) setState(() { _entries = entries; _isLoading = false; });
+      if (mounted)
+        setState(() {
+          _entries = entries;
+          _isLoading = false;
+        });
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _isLoading = false; });
+      if (mounted)
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
     }
   }
 
@@ -51,9 +69,21 @@ class _MobileTimetableScreenState extends State<MobileTimetableScreen> {
   }
 
   String _formatDate(DateTime d) {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun',
-                    'Jul','Aug','Sep','Oct','Nov','Dec'];
-    const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return '${days[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
   }
 
@@ -68,7 +98,7 @@ class _MobileTimetableScreenState extends State<MobileTimetableScreen> {
         children: [
           // Static background
           ParallaxBackground(
-            scrollOffset: 0,
+            scrollController: _scrollController,
             overscrollAllowance: screenHeight * 0.15,
             screenHeight: screenHeight,
           ),
@@ -171,6 +201,7 @@ class _MobileTimetableScreenState extends State<MobileTimetableScreen> {
     }
 
     return ListView.builder(
+      controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 160),
       itemCount: grouped.length,
       itemBuilder: (_, i) {
@@ -359,7 +390,8 @@ class _MobileTimetableScreenState extends State<MobileTimetableScreen> {
             GestureDetector(
               onTap: _fetchEntries,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
                 decoration: BoxDecoration(
                   color: AppTheme.backgroundColor,
                   borderRadius: BorderRadius.circular(20),

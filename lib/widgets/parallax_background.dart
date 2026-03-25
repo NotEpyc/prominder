@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 /// A reusable widget that renders a trailing parallax background
 /// with adaptively mirrored geometric layers.
 class ParallaxBackground extends StatelessWidget {
-  final double scrollOffset;
+  final ScrollController scrollController;
   final double overscrollAllowance;
   final double screenHeight;
 
   const ParallaxBackground({
     super.key,
-    required this.scrollOffset,
+    required this.scrollController,
     required this.overscrollAllowance,
     required this.screenHeight,
   });
@@ -22,34 +22,41 @@ class ParallaxBackground extends StatelessWidget {
     // So the total required layer height is screenHeight + 2000.
     final requiredHeight = screenHeight + 2000 + overscrollAllowance;
 
-    return Stack(
-      children: List.generate(6, (index) {
-        final imageNumber = index + 1;
-        
-        // ALL layers must move at the exact same physical speed (targetY) so seams align perfectly.
-        const parallaxFactor = 0.5;
-        
-        // Start shifted up by overscroll allowance.
-        double targetY = -overscrollAllowance - (scrollOffset * parallaxFactor);
-        
-        // Hard clamp so if the user overscrolls to the top, it doesn't reveal the raw background.
-        targetY = targetY > 0 ? 0 : targetY;
+    return AnimatedBuilder(
+      animation: scrollController,
+      builder: (context, child) {
+        final scrollOffset = scrollController.hasClients ? scrollController.offset : 0.0;
 
-        // "Train bogies" delay effect: lower layers snap instantly, higher layers trail slower.
-        final trailingDurationMs = 100 + (index * 250);
+        return Stack(
+          children: List.generate(6, (index) {
+            final imageNumber = index + 1;
+            
+            // ALL layers must move at the exact same physical speed (targetY) so seams align perfectly.
+            const parallaxFactor = 0.5;
+            
+            // Start shifted up by overscroll allowance.
+            double targetY = -overscrollAllowance - (scrollOffset * parallaxFactor);
+            
+            // Hard clamp so if the user overscrolls to the top, it doesn't reveal the raw background.
+            targetY = targetY > 0 ? 0 : targetY;
 
-        return AnimatedPositioned(
-          duration: Duration(milliseconds: trailingDurationMs),
-          curve: Curves.easeOutQuad,
-          top: targetY,
-          left: -20, // Optional slight horizontal bleed
-          right: -20,
-          child: _AdaptiveMirroredImage(
-            imagePath: 'assets/images/home/$imageNumber.png',
-            requiredHeight: requiredHeight,
-          ),
+            // "Train bogies" delay effect: lower layers snap instantly, higher layers trail slower.
+            final trailingDurationMs = 100 + (index * 250);
+
+            return AnimatedPositioned(
+              duration: Duration(milliseconds: trailingDurationMs),
+              curve: Curves.easeOutQuad,
+              top: targetY,
+              left: -20, // Optional slight horizontal bleed
+              right: -20,
+              child: _AdaptiveMirroredImage(
+                imagePath: 'assets/images/home/$imageNumber.png',
+                requiredHeight: requiredHeight,
+              ),
+            );
+          }),
         );
-      }),
+      },
     );
   }
 }

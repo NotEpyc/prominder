@@ -25,11 +25,11 @@ class _FloatingBottomNavbarState extends State<FloatingBottomNavbar>
   late Animation<double> _itemsWidth;
 
   final List<NavItem> _navItems = [
-    NavItem(icon: Icons.home_rounded, index: 0),
-    NavItem(icon: Icons.bubble_chart_rounded, index: 1),
-    NavItem(icon: Icons.calendar_month_rounded, index: 2),
-    NavItem(icon: Icons.style_rounded, index: 3),
-    NavItem(icon: Icons.person_rounded, index: 4),
+    NavItem(icon: 'assets/icons/home.png', index: 0),
+    NavItem(icon: 'assets/icons/robot.png', index: 1),
+    NavItem(icon: 'assets/icons/calendar.png', index: 2),
+    NavItem(icon: 'assets/icons/style.png', index: 3),
+    NavItem(icon: 'assets/icons/user.png', index: 4),
   ];
 
   @override
@@ -217,14 +217,11 @@ class _FloatingBottomNavbarState extends State<FloatingBottomNavbar>
                                                     )
                                                     : null,
                                             child: Center(
-                                              child: Icon(
+                                              child: Image.asset(
                                                 item.icon,
-                                                color:
-                                                    isSelected
-                                                        ? AppTheme.primaryColor
-                                                        : AppTheme
-                                                            .descriptionTextColor,
-                                                size: iconSize,
+                                                width: iconSize,
+                                                height: iconSize,
+                                                // No color override, preserving your baked-in neumorphism
                                               ),
                                             ),
                                           ),
@@ -318,7 +315,7 @@ class _FloatingBottomNavbarState extends State<FloatingBottomNavbar>
 }
 
 class NavItem {
-  final IconData icon;
+  final String icon;
   final int index;
 
   NavItem({required this.icon, required this.index});

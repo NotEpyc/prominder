@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -59,13 +58,7 @@ class TimetableEntry {
 class TimetableService {
   static const Duration _timeout = Duration(seconds: 40);
 
-  static String get _baseUrl {
-    final url = dotenv.env['API_BASE_URL'];
-    if (url == null || url.isEmpty) {
-      throw Exception("API_BASE_URL is not set in .env");
-    }
-    return url;
-  }
+  static String get _baseUrl => 'https://prominder.up.railway.app';
 
   static Future<Map<String, String>> _authHeaders([
     String? overrideToken,

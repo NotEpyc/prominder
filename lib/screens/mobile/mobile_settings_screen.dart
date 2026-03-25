@@ -46,7 +46,7 @@ class _MobileSettingsScreenState extends State<MobileSettingsScreen> {
       body: Stack(
         children: [
           ParallaxBackground(
-            scrollOffset: 0,
+            scrollController: ScrollController(),
             overscrollAllowance: screenHeight * 0.15,
             screenHeight: screenHeight,
           ),
@@ -79,7 +79,14 @@ class _MobileSettingsScreenState extends State<MobileSettingsScreen> {
                           ],
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.primaryColor, size: 20),
+                          icon: Transform.rotate(
+                            angle: 3.14159, // 180 degrees in radians
+                            child: Image.asset(
+                              'assets/icons/right_arrow.png',
+                              width: 22,
+                              height: 22,
+                            ),
+                          ),
                           onPressed: () => Navigator.pop(context),
                         ),
                       ),
@@ -103,14 +110,14 @@ class _MobileSettingsScreenState extends State<MobileSettingsScreen> {
                       _buildSectionTitle('Account'),
                       _buildSettingsTile(
                         context,
-                        icon: Icons.person_outline_rounded,
+                        iconWidget: Image.asset('assets/icons/user.png', width: 24, height: 24),
                         title: 'Edit Profile',
                         subtitle: 'Change your name',
                         onTap: () => _showEditProfileDialog(context),
                       ),
                       _buildSettingsTile(
                         context,
-                        icon: Icons.lock_outline_rounded,
+                        iconWidget: Image.asset('assets/icons/lock.png', width: 24, height: 24),
                         title: 'Change Password',
                         subtitle: 'Update your security credentials',
                         onTap: () => _showChangePasswordDialog(context),
@@ -120,14 +127,14 @@ class _MobileSettingsScreenState extends State<MobileSettingsScreen> {
                       _buildSectionTitle('Preferences'),
                       _buildSettingsTile(
                         context,
-                        icon: Icons.notifications_none_rounded,
+                        iconWidget: Image.asset('assets/icons/notification.png', width: 24, height: 24),
                         title: 'Notifications',
                         subtitle: 'Manage alerts and reminders',
                         onTap: () => _showComingSoon(context, 'Notifications'),
                       ),
                       _buildSettingsTile(
                         context,
-                        icon: Icons.dark_mode_outlined,
+                        iconWidget: Image.asset('assets/icons/theme.png', width: 24, height: 24),
                         title: 'Theme',
                         subtitle: 'System default',
                         onTap: () => _showComingSoon(context, 'Theme'),
@@ -137,13 +144,13 @@ class _MobileSettingsScreenState extends State<MobileSettingsScreen> {
                       _buildSectionTitle('More'),
                       _buildSettingsTile(
                         context,
-                        icon: Icons.privacy_tip_outlined,
+                        iconWidget: Image.asset('assets/icons/privacy.png', width: 24, height: 24),
                         title: 'Privacy Policy',
                         onTap: () => _showComingSoon(context, 'Privacy Policy'),
                       ),
                       _buildSettingsTile(
                         context,
-                        icon: Icons.help_outline_rounded,
+                        iconWidget: Image.asset('assets/icons/support.png', width: 24, height: 24),
                         title: 'Help & Support',
                         onTap: () => _showComingSoon(context, 'Help & Support'),
                       ),
@@ -184,7 +191,7 @@ class _MobileSettingsScreenState extends State<MobileSettingsScreen> {
     );
   }
 
-  Widget _buildSettingsTile(BuildContext context, {required IconData icon, required String title, String? subtitle, required VoidCallback onTap}) {
+  Widget _buildSettingsTile(BuildContext context, {required Widget iconWidget, required String title, String? subtitle, required VoidCallback onTap}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16.0),
       decoration: BoxDecoration(
@@ -212,7 +219,7 @@ class _MobileSettingsScreenState extends State<MobileSettingsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
             child: Row(
               children: [
-                Icon(icon, color: AppTheme.primaryColor),
+                iconWidget,
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
