@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,8 +7,10 @@ import 'package:open_filex/open_filex.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/chatbot_service.dart';
+import '../../core/services/timetable_service.dart';
 import '../../widgets/parallax_background.dart';
 import '../../widgets/global_loader.dart';
 import '../../widgets/floating_bottom_navbar.dart';
@@ -54,12 +57,14 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
   bool _isFirstLoad = true;
   String _sidebarSearchQuery = '';
   final TextEditingController _sidebarSearchController =
-      TextEditingController();
+      TextEditingController(); // Error / retry state
+  String? _chatError; // human-readable error message
+  String? _retryMessage; // text to re-send on retry
+  File? _retryFile; // file to re-send on retry (if any)
 
   final List<_ChatMessage> _messages = [
     _ChatMessage(
-      text: 'Hi! I\'m your AI study assistant. Ask me anything about '
-          'your schedule, subjects, or study tips.',
+      text: 'Hi! I\'m Promi. How can I help you today?',
       isUser: false,
     ),
   ];
@@ -88,10 +93,10 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
     if (mounted) setState(() => _isFirstLoad = false);
   }
 
-  Future<void> _loadHistory() async {
-    setState(() => _isLoadingHistory = true);
+  Future<void> _loadHistory({bool forceRefresh = false}) async {
+    if (!forceRefresh) setState(() => _isLoadingHistory = true);
     try {
-      final history = await ChatbotService.listConversations();
+      final history = await ChatbotService.listConversations(forceRefresh: forceRefresh);
       if (mounted) setState(() => _history = history);
     } catch (_) {
       // Ignore errors for now or show toast
@@ -213,6 +218,10 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
       _isBotTyping = true;
       _stagedFile = null;
       _hasText = false;
+      // Clear any previous error banner
+      _chatError = null;
+      _retryMessage = null;
+      _retryFile = null;
     });
     _scrollToBottom();
 
@@ -233,6 +242,24 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
       }
 
       if (!mounted) return;
+
+      // ── DEBUG: log what the backend returned ─────────────────────────────
+      debugPrint('[Chatbot] tool=${result.tool} '
+          'entries=${result.entries?.length ?? 0} '
+          'hasTimetableEntries=${result.hasTimetableEntries}');
+
+      // ── Detect backend error leakages ────────────────────────────────────
+      // Sometimes the backend API returns raw Gemini errors instead of giving
+      // a proper 500 status code. If we detect these strings, we throw them as
+      // an exception so the Error Banner handles it, instead of adding an ugly
+      // robot bubble to the chat.
+      final lowerRes = result.response.toLowerCase();
+      if (lowerRes.contains('gemini api error') ||
+          lowerRes.contains('429 client error') ||
+          lowerRes.contains('too many requests')) {
+        throw ChatbotException(result.response);
+      }
+
       setState(() {
         _conversationId = result.conversationId; // persist for next turn
         if (_conversationTitle == null) {
@@ -242,14 +269,40 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
         }
         _isBotTyping = false;
         _messages.add(_ChatMessage(text: result.response, isUser: false));
+        
+        // ── Notes tool response ──────────────────────────────────────────────
+        if (result.hasNote) {
+          final noteTitle = result.noteTitle;
+          _messages.add(_ChatMessage(
+            text: '✅ **Study Note Generated!**\n'
+                'Swipable flashcards are ready for \'$noteTitle\'.',
+            isUser: false,
+            isNoteResult: true,
+            noteTopicTitle: noteTitle,
+          ));
+        }
+
+        // ── Timetable tool response ────────────────────────────────────────
+        if (result.hasTimetableEntries) {
+          _messages.add(_ChatMessage(
+            text: '✅ **${result.entries!.length} session(s) scheduled!**\n'
+                'Your timetable has been updated. Head to the Timetable tab to view it.',
+            isUser: false,
+            isTimetableResult: true,
+            timetableEntryCount: result.entries!.length,
+          ));
+          // Bust the timetable cache so the Timetable screen sees fresh data.
+          TimetableService.invalidateCache();
+        }
       });
     } on ChatbotException catch (e) {
       if (!mounted) return;
       setState(() {
         _isBotTyping = false;
-        _messages.add(
-          _ChatMessage(text: '⚠️ ${e.message}', isUser: false, isError: true),
-        );
+        _chatError = _friendlyError(e.message);
+        // Store what the user sent so they can retry with one tap
+        _retryMessage = text;
+        _retryFile = fileToSend;
       });
     }
 
@@ -338,6 +391,9 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                             ),
                     ),
 
+                    // ── Error banner ──────────────────────────────────────
+                    if (_chatError != null) _buildErrorBanner(),
+
                     // Input bar
                     _buildInputBar(),
                     // Space for navbar when only greeting is shown
@@ -352,6 +408,153 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                 currentIndex: widget.initialNavIndex,
                 onTap: widget.onNavTap,
               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Error helpers ───────────────────────────────────────────────────────────
+
+  /// Maps raw exception messages to concise, user-friendly strings.
+  String _friendlyError(String raw) {
+    final lower = raw.toLowerCase();
+    if (lower.contains('internet') ||
+        lower.contains('socket') ||
+        lower.contains('network') ||
+        lower.contains('reach the server') ||
+        lower.contains('connection')) {
+      return 'No internet connection';
+    }
+    if (lower.contains('took too long') || lower.contains('timeout')) {
+      return 'Request timed out';
+    }
+    if (lower.contains('session expired') || lower.contains('log in again')) {
+      return 'Session expired — please log in again';
+    }
+    if (lower.contains('too many requests') || lower.contains('429')) {
+      return 'AI service is busy (too many requests). Please try again in a moment.';
+    }
+    if (lower.contains('gemini api error') || lower.contains('server error') || lower.contains('500')) {
+      return 'Server error — try again later';
+    }
+    return 'Something went wrong';
+  }
+
+  /// Neumorphic banner shown above the input bar on failure. Has a "Try again"
+  /// button that re-sends the failed message and an ✕ to silently dismiss.
+  Widget _buildErrorBanner() {
+    final isNetworkError = _chatError == 'No internet connection';
+    final icon = isNetworkError
+        ? 'assets/icons/support.png'
+        : 'assets/icons/notification.png';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.backgroundColor,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.red.withValues(alpha: 0.15),
+              offset: const Offset(4, 4),
+              blurRadius: 10,
+              spreadRadius: -1,
+            ),
+            const BoxShadow(
+              color: AppTheme.buttonHighlightColor,
+              offset: Offset(-4, -4),
+              blurRadius: 10,
+              spreadRadius: -1,
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            // Icon
+            Image.asset(icon, width: 22, height: 22),
+            const SizedBox(width: 12),
+
+            // Message
+            Expanded(
+              child: Text(
+                _chatError!,
+                style: const TextStyle(
+                  color: AppTheme.textColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+
+            // Try again button
+            GestureDetector(
+              onTap: () {
+                final msgToRetry = _retryMessage;
+                final fileToRetry = _retryFile;
+                setState(() {
+                  _chatError = null;
+                  _retryMessage = null;
+                  _retryFile = null;
+                });
+                // Re-inject the failed text & file, then send
+                if (msgToRetry != null) {
+                  _inputController.text = msgToRetry;
+                }
+                if (fileToRetry != null) {
+                  _stagedFile = fileToRetry;
+                }
+                _sendMessage();
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppTheme.backgroundColor,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      offset: const Offset(2, 2),
+                      blurRadius: 4,
+                      spreadRadius: -1,
+                    ),
+                    const BoxShadow(
+                      color: AppTheme.buttonHighlightColor,
+                      offset: Offset(-2, -2),
+                      blurRadius: 4,
+                      spreadRadius: -1,
+                    ),
+                  ],
+                ),
+                child: const Text(
+                  'Try again',
+                  style: TextStyle(
+                    color: AppTheme.primaryColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            // Dismiss button
+            GestureDetector(
+              onTap: () => setState(() {
+                _chatError = null;
+                _retryMessage = null;
+                _retryFile = null;
+              }),
+              child: const Icon(
+                Icons.close_rounded,
+                color: AppTheme.descriptionTextColor,
+                size: 18,
+              ),
+            ),
           ],
         ),
       ),
@@ -421,13 +624,40 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
 
             // ── Scrollable Content ──
             Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  const SizedBox(height: 12),
-                  // ── Core Actions ──
+              child: CustomRefreshIndicator(
+                onRefresh: () async {
+                  await _loadHistory(forceRefresh: true);
+                },
+                builder: (context, child, controller) {
+                  return Stack(
+                    alignment: Alignment.topCenter,
+                    children: <Widget>[
+                      if (!controller.isIdle)
+                        Positioned(
+                          top: 35.0 * controller.value,
+                          child: const SpinKitCubeGrid(
+                            color: AppTheme.secondaryColor,
+                            size: 30.0,
+                          ),
+                        ),
+                      Transform.translate(
+                        offset: Offset(0, 60.0 * controller.value),
+                        child: child,
+                      ),
+                    ],
+                  );
+                },
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
+                  children: [
+                    const SizedBox(height: 12),
+                    // ── Core Actions ──
                   _buildSidebarItem(
-                    iconWidget: Image.asset('assets/icons/edit.png', width: 22, height: 22),
+                    iconWidget: Image.asset('assets/icons/edit.png',
+                        width: 22, height: 22),
                     label: 'New chat',
                     isActive: false,
                     onTap: () => _startNewConversation(fromDrawer: true),
@@ -520,6 +750,7 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                 ],
               ),
             ),
+            ),
           ],
         ),
       ),
@@ -577,7 +808,8 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
     return filteredHistory.map((thread) {
       final isCurrent = thread.id == _conversationId;
       return _buildSidebarItem(
-        iconWidget: Image.asset('assets/icons/message.png', width: 20, height: 20),
+        iconWidget:
+            Image.asset('assets/icons/message.png', width: 20, height: 20),
         label: thread.title,
         isActive: isCurrent,
         onTap: () => _openConversation(thread),
@@ -763,8 +995,8 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
             : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.insert_drive_file_rounded,
-                      color: AppTheme.primaryColor, size: 24),
+                  Image.asset('assets/icons/document.png',
+                      width: 24, height: 24),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
@@ -785,6 +1017,189 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
   }
 
   Widget _buildBubble(_ChatMessage msg) {
+    // ── Special timetable-result card ──────────────────────────────────────
+    if (msg.isTimetableResult) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppTheme.backgroundColor,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.lightGreen.withValues(alpha: 0.25),
+                offset: const Offset(4, 4),
+                blurRadius: 10,
+                spreadRadius: -1,
+              ),
+              const BoxShadow(
+                color: AppTheme.buttonHighlightColor,
+                offset: Offset(-4, -4),
+                blurRadius: 10,
+                spreadRadius: -1,
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.lightGreen.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Image.asset('assets/icons/calendar.png',
+                    width: 24, height: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${msg.timetableEntryCount} session(s) scheduled!',
+                      style: const TextStyle(
+                        color: AppTheme.textColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Your timetable is ready.',
+                      style: TextStyle(
+                        color: AppTheme.descriptionTextColor,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () => widget.onNavTap(2), // navigate to Timetable tab
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundColor,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        offset: const Offset(3, 3),
+                        blurRadius: 6,
+                        spreadRadius: -1,
+                      ),
+                      const BoxShadow(
+                        color: AppTheme.buttonHighlightColor,
+                        offset: Offset(-3, -3),
+                        blurRadius: 6,
+                        spreadRadius: -1,
+                      ),
+                    ],
+                  ),
+                  child: Image.asset('assets/icons/right_arrow.png',
+                      width: 18, height: 18),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (msg.isNoteResult) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppTheme.backgroundColor,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryColor.withValues(alpha: 0.25),
+                offset: const Offset(4, 4),
+                blurRadius: 10,
+                spreadRadius: -1,
+              ),
+              const BoxShadow(
+                color: AppTheme.buttonHighlightColor,
+                offset: Offset(-4, -4),
+                blurRadius: 10,
+                spreadRadius: -1,
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Image.asset('assets/icons/style.png',
+                    width: 24, height: 24, color: AppTheme.primaryColor),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Study Note Generated!',
+                      style: TextStyle(
+                        color: AppTheme.textColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Flashcards ready for \'${msg.noteTopicTitle ?? "Topic"}\'.',
+                      style: const TextStyle(
+                        color: AppTheme.descriptionTextColor,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () => widget.onNavTap(3), // navigate to Flashcards tab
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundColor,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        offset: const Offset(3, 3),
+                        blurRadius: 6,
+                        spreadRadius: -1,
+                      ),
+                      const BoxShadow(
+                        color: AppTheme.buttonHighlightColor,
+                        offset: Offset(-3, -3),
+                        blurRadius: 6,
+                        spreadRadius: -1,
+                      ),
+                    ],
+                  ),
+                  child: Image.asset('assets/icons/right_arrow.png',
+                      width: 18, height: 18),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -1240,8 +1655,8 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
                   width: 44, height: 44, fit: BoxFit.cover),
             )
           else
-            const Icon(Icons.insert_drive_file_rounded,
-                color: AppTheme.primaryColor, size: 40),
+            Image.asset('assets/icons/document.png',
+                width: 36, height: 36),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -1255,8 +1670,14 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close_rounded,
-                color: AppTheme.descriptionTextColor),
+            icon: Transform.rotate(
+              angle: 0.785398, // 45 degrees in radians
+              child: Image.asset(
+                'assets/icons/plus.png',
+                width: 22,
+                height: 22,
+              ),
+            ),
             onPressed: () {
               setState(() {
                 _stagedFile = null;
@@ -1282,7 +1703,7 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
 
   Future<void> _pickDocument() async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
+      type: FileType.any,
     );
     if (result != null && result.files.single.path != null) {
       setState(() {
@@ -1334,19 +1755,27 @@ class _MobileChatbotScreenState extends State<MobileChatbotScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _AttachOption(
-                  icon: Icons.image_rounded,
-                  label: 'File',
+                  iconAsset: 'assets/icons/document.png',
+                  label: 'Document',
                   onTap: () {
                     Navigator.pop(context);
                     _pickDocument();
                   },
                 ),
                 _AttachOption(
-                  icon: Icons.camera_alt_rounded,
+                  iconAsset: 'assets/icons/camera.png',
                   label: 'Camera',
                   onTap: () {
                     Navigator.pop(context);
                     _pickImage(ImageSource.camera);
+                  },
+                ),
+                _AttachOption(
+                  iconAsset: 'assets/icons/gallery.png',
+                  label: 'Gallery',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickImage(ImageSource.gallery);
                   },
                 ),
               ],
@@ -1405,11 +1834,20 @@ class _ChatMessage {
   final bool isUser;
   final bool isError;
   final String? attachedFilePath;
+  final bool isTimetableResult;
+  final int? timetableEntryCount;
+  final bool isNoteResult;
+  final String? noteTopicTitle;
+  
   _ChatMessage({
     required this.text,
     required this.isUser,
     this.isError = false,
     this.attachedFilePath,
+    this.isTimetableResult = false,
+    this.timetableEntryCount,
+    this.isNoteResult = false,
+    this.noteTopicTitle,
   });
 }
 
@@ -1453,12 +1891,12 @@ class _NeumorphicIconButton extends StatelessWidget {
 }
 
 class _AttachOption extends StatelessWidget {
-  final IconData icon;
+  final String iconAsset;
   final String label;
   final VoidCallback onTap;
 
   const _AttachOption({
-    required this.icon,
+    required this.iconAsset,
     required this.label,
     required this.onTap,
   });
@@ -1491,7 +1929,13 @@ class _AttachOption extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(icon, color: AppTheme.primaryColor, size: 26),
+            child: Center(
+              child: Image.asset(
+                iconAsset,
+                width: 26,
+                height: 26,
+              ),
+            ),
           ),
           const SizedBox(height: 10),
           Text(

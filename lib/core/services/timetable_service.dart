@@ -60,6 +60,14 @@ class TimetableService {
 
   static String get _baseUrl => 'https://prominder.up.railway.app';
 
+  /// Call this after any chatbot tool creates/modifies timetable entries so
+  /// the next [fetchEntries] call hits the network instead of stale cache.
+  static Future<void> invalidateCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('cached_timetable_entries');
+    await prefs.remove('timetable_fetched_at');
+  }
+
   static Future<Map<String, String>> _authHeaders([
     String? overrideToken,
   ]) async {

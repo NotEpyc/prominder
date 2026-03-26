@@ -82,10 +82,15 @@ class _MobileLandingScreenState extends State<MobileLandingScreen> {
     final token = prefs.getString('access_token');
     if (!mounted) return;
     if (token != null && token.isNotEmpty) {
+      // Yield to let the neat button animation finish before routing
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const MobileHomeScreen()),
       );
     } else {
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const MobileLoginScreen()),
       );

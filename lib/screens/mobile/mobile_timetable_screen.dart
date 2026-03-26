@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/timetable_service.dart';
 import '../../widgets/parallax_background.dart';
@@ -200,32 +202,55 @@ class _MobileTimetableScreenState extends State<MobileTimetableScreen> {
       grouped.putIfAbsent(key, () => []).add(entry);
     }
 
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 160),
-      itemCount: grouped.length,
-      itemBuilder: (_, i) {
-        final date = grouped.keys.elementAt(i);
-        final dayEntries = grouped[date]!;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 20, bottom: 12, left: 4),
-              child: Text(
-                date,
-                style: const TextStyle(
-                  color: AppTheme.primaryColor,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
+    return CustomRefreshIndicator(
+      onRefresh: _fetchEntries,
+      builder: (context, child, controller) {
+        return Stack(
+          alignment: Alignment.topCenter,
+          children: <Widget>[
+            if (!controller.isIdle)
+              Positioned(
+                top: 30.0 * controller.value,
+                child: const SpinKitCubeGrid(
+                  color: AppTheme.secondaryColor,
+                  size: 30.0,
                 ),
               ),
+            Transform.translate(
+              offset: Offset(0, 70.0 * controller.value),
+              child: child,
             ),
-            ...dayEntries.map((e) => _buildEntryCard(e)),
           ],
         );
       },
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 160),
+        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+        itemCount: grouped.length,
+        itemBuilder: (_, i) {
+          final date = grouped.keys.elementAt(i);
+          final dayEntries = grouped[date]!;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 20, bottom: 12, left: 4),
+                child: Text(
+                  date,
+                  style: const TextStyle(
+                    color: AppTheme.primaryColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              ...dayEntries.map((e) => _buildEntryCard(e)),
+            ],
+          );
+        },
+      ),
     );
   }
 

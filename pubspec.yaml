@@ -47,6 +47,9 @@ dependencies:
   open_filex: ^4.7.0
   google_fonts: ^6.2.1
   flutter_svg: ^2.0.10
+  flip_card: ^0.7.0
+  flutter_card_swiper: ^7.2.0
+  custom_refresh_indicator: ^4.0.1
 
 dev_dependencies:
   flutter_test:

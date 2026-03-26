@@ -13,20 +13,84 @@ class ConverseResult {
   final String? tool;
   final bool contextUsed;
   final int conversationId;
+  /// Non-null when a timetable tool (save_timetable_config / generate_timetable
+  /// / adaptive_reschedule) returns generated schedule entries.
+  final List<Map<String, dynamic>>? entries;
+
+  /// A single note object returned from backend (key: 'note').
+  final Map<String, dynamic>? note;
+
+  /// Multiple notes returned from backend (key: 'notes').
+  final List<Map<String, dynamic>>? notes;
 
   const ConverseResult({
     required this.response,
     this.tool,
     required this.contextUsed,
     required this.conversationId,
+    this.entries,
+    this.note,
+    this.notes,
   });
 
-  factory ConverseResult.fromJson(Map<String, dynamic> j) => ConverseResult(
-        response: j['response'] as String? ?? '',
-        tool: j['tool'] as String?,
-        contextUsed: j['context_used'] as bool? ?? false,
-        conversationId: j['conversation_id'] as int,
-      );
+  factory ConverseResult.fromJson(Map<String, dynamic> j) {
+    List<Map<String, dynamic>>? entries;
+    final rawEntries = j['entries'];
+    if (rawEntries is List && rawEntries.isNotEmpty) {
+      entries = rawEntries.whereType<Map<String, dynamic>>().toList();
+    }
+
+    // Handle single note object
+    final rawNote = j['note'];
+    Map<String, dynamic>? note;
+    if (rawNote is Map<String, dynamic> && rawNote.isNotEmpty) {
+      note = rawNote;
+    }
+
+    // Handle list of notes
+    List<Map<String, dynamic>>? notes;
+    final rawNotes = j['notes'];
+    if (rawNotes is List && rawNotes.isNotEmpty) {
+      notes = rawNotes.whereType<Map<String, dynamic>>().toList();
+    }
+
+    return ConverseResult(
+      response: j['response'] as String? ?? '',
+      tool: j['tool'] as String?,
+      contextUsed: j['context_used'] as bool? ?? false,
+      conversationId: j['conversation_id'] as int,
+      entries: entries,
+      note: note,
+      notes: notes,
+    );
+  }
+
+  /// Returns true whenever the backend response carries schedule entries.
+  bool get hasTimetableEntries => entries != null && entries!.isNotEmpty;
+
+  /// Returns true whenever the backend generated any study notes.
+  /// ONLY fires when the response body explicitly contains a 'note' object
+  /// or a non-empty 'notes' list. Tool-name guesses are intentionally removed
+  /// to avoid false positives on unrelated tools (e.g. ocr, study_planner).
+  bool get hasNote {
+    if (note != null && note!.isNotEmpty) return true;
+    if (notes != null && notes!.isNotEmpty) return true;
+    return false;
+  }
+
+  /// Returns the best title string we can extract from either note shape.
+  String get noteTitle {
+    // Single note
+    if (note != null) {
+      return (note!['topic_title'] ?? note!['parent_topic'] ?? 'Study Note') as String;
+    }
+    // First note from list
+    if (notes != null && notes!.isNotEmpty) {
+      final first = notes!.first;
+      return (first['topic_title'] ?? first['parent_topic'] ?? 'Study Note') as String;
+    }
+    return 'Study Note';
+  }
 }
 
 class ConversationSummary {
@@ -95,7 +159,7 @@ class ChatbotException implements Exception {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ChatbotService {
-  static const Duration _timeout = Duration(seconds: 30);
+  static const Duration _timeout = Duration(seconds: 120);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -217,6 +281,8 @@ class ChatbotService {
       final body = <String, dynamic>{'message': message};
       if (conversationId != null) body['conversation_id'] = conversationId;
 
+
+
       // Un-cache preemptively since state is aggressively changing.
       _cachedHistory = null;
       if (conversationId != null) {
@@ -230,7 +296,7 @@ class ChatbotService {
         body: body,
       );
 
-      if (response.statusCode == 200) {
+      if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return ConverseResult.fromJson(data);
       }
@@ -314,7 +380,7 @@ class ChatbotService {
         }
       }
 
-      if (response.statusCode == 200) {
+      if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return ConverseResult.fromJson(data);
       }

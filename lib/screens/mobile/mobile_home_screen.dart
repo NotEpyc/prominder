@@ -8,6 +8,9 @@ import 'dashboard_content.dart';
 import 'mobile_chatbot_screen.dart';
 import 'mobile_timetable_screen.dart';
 import 'mobile_profile_screen.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
+import 'mobile_flashcards_screen.dart';
 
 class MobileHomeScreen extends StatefulWidget {
   const MobileHomeScreen({super.key});
@@ -98,10 +101,8 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           initialNavIndex: _currentNavIndex,
           onNavTap: (index) => setState(() => _currentNavIndex = index),
         ),
-        // Placeholder for Cards (3)
-        MobileChatbotScreen(
+        MobileFlashcardsScreen(
           initialNavIndex: _currentNavIndex,
-          initialPrompt: null,
           onNavTap: (index) => setState(() => _currentNavIndex = index),
         ),
         MobileProfileScreen(
@@ -135,18 +136,41 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
           else ...[
             // ── Layer 1: Scrollable content (locked while search is active) ───
             Positioned.fill(
-              child: ListView(
-                controller: _scrollController,
-                physics:
-                    _searchActive
-                        ? const NeverScrollableScrollPhysics()
-                        : const BouncingScrollPhysics(),
-                children: [
-                  DashboardContent(
-                    searchActive: _searchActive,
-                    onDismissSearch: _dismissSearch,
-                  ),
-                ],
+              child: CustomRefreshIndicator(
+                onRefresh: () async {
+                  await _simulateLoading();
+                },
+                builder: (context, child, controller) {
+                  return Stack(
+                    alignment: Alignment.topCenter,
+                    children: <Widget>[
+                      if (!controller.isIdle)
+                        Positioned(
+                          top: statusBarHeight + 90.0 + (40.0 * controller.value),
+                          child: const SpinKitCubeGrid(
+                            color: AppTheme.secondaryColor,
+                            size: 30.0,
+                          ),
+                        ),
+                      Transform.translate(
+                        offset: Offset(0, 110.0 * controller.value),
+                        child: child,
+                      ),
+                    ],
+                  );
+                },
+                child: ListView(
+                  controller: _scrollController,
+                  physics: _searchActive
+                      ? const NeverScrollableScrollPhysics()
+                      : const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                  children: [
+                    DashboardContent(
+                      searchActive: _searchActive,
+                      onDismissSearch: _dismissSearch,
+                    ),
+                  ],
+                ),
               ),
             ),
 
