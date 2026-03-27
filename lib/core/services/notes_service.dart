@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_service.dart';
 
 class StudyNote {
   final int id;
@@ -42,10 +43,25 @@ class NotesService {
   }
 
   static Future<List<StudyNote>> getNotes() async {
-    final headers = await _authHeaders();
     final uri = Uri.parse('$_baseUrl/api/chatbot/notes/');
+    var headers = await _authHeaders();
 
-    final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 15));
+    http.Response response = await http
+        .get(uri, headers: headers)
+        .timeout(const Duration(seconds: 15));
+
+    // On 401, attempt a token refresh and retry once
+    if (response.statusCode == 401) {
+      final refreshed = await AuthService.refreshToken();
+      if (refreshed) {
+        headers = await _authHeaders();
+        response = await http
+            .get(uri, headers: headers)
+            .timeout(const Duration(seconds: 15));
+      } else {
+        throw Exception('Session expired. Please log in again.');
+      }
+    }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final List<dynamic> data = jsonDecode(response.body);

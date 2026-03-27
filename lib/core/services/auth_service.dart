@@ -64,7 +64,7 @@ class AuthService {
       http.Response response = await http.get(uri, headers: headers).timeout(_timeout);
 
       if (response.statusCode == 401) {
-        if (await _refreshToken()) {
+        if (await refreshToken()) {
           headers = await _authHeaders();
           response = await http.get(uri, headers: headers).timeout(_timeout);
         } else {
@@ -106,7 +106,7 @@ class AuthService {
       var response = await http.patch(uri, headers: headers, body: jsonEncode(body)).timeout(_timeout);
 
       if (response.statusCode == 401) {
-        if (await _refreshToken()) {
+        if (await refreshToken()) {
           headers = await _authHeaders();
           response = await http.patch(uri, headers: headers, body: jsonEncode(body)).timeout(_timeout);
         } else {
@@ -172,7 +172,7 @@ class AuthService {
     }
   }
 
-  static Future<bool> _refreshToken() async {
+  static Future<bool> refreshToken() async {
     final prefs = await SharedPreferences.getInstance();
     final refreshToken = prefs.getString('refresh_token');
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_service.dart';
 
 class Topic {
   final int id;
@@ -118,45 +119,20 @@ class TimetableService {
       return response;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    final refreshToken = prefs.getString('refresh_token');
-
-    if (refreshToken == null || refreshToken.isEmpty) {
+    // 401 — refresh via shared AuthService
+    final refreshed = await AuthService.refreshToken();
+    if (!refreshed) {
       throw Exception('Session expired. Please log in again.');
     }
 
-    final refreshResponse = await http
-        .post(
-          Uri.parse('$_baseUrl/api/auth/token/refresh/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'refresh': refreshToken}),
-        )
-        .timeout(_timeout);
-
-    if (refreshResponse.statusCode == 200) {
-      final data = jsonDecode(refreshResponse.body);
-      final newAccessToken = data['access'];
-      if (newAccessToken != null) {
-        await prefs.setString('access_token', newAccessToken);
-        if (data['refresh'] != null) {
-          await prefs.setString('refresh_token', data['refresh']);
-        }
-
-        headers = await _authHeaders(newAccessToken);
-        if (method == 'POST') {
-          return await http
-              .post(
-                uri,
-                headers: headers,
-                body: body != null ? jsonEncode(body) : null,
-              )
-              .timeout(_timeout);
-        } else {
-          return await http.get(uri, headers: headers).timeout(_timeout);
-        }
-      }
+    headers = await _authHeaders();
+    if (method == 'POST') {
+      return await http
+          .post(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+          .timeout(_timeout);
+    } else {
+      return await http.get(uri, headers: headers).timeout(_timeout);
     }
-    throw Exception('Session expired. Please log in again.');
   }
 
   static Future<List<TimetableEntry>> fetchEntries({

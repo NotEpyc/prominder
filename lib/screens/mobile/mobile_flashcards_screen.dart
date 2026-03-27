@@ -9,15 +9,6 @@ import '../../core/services/notes_service.dart';
 import '../../widgets/parallax_background.dart';
 import '../../widgets/floating_bottom_navbar.dart';
 
-// ─── Bento tile accent colours ─────────────────────────────────────────────
-const List<Color> _kAccents = [
-  Color(0xFF588157),
-  Color(0xFF3A5A40),
-  Color(0xFFB56576),
-  Color(0xFFD4A373),
-  Color(0xFF81B622),
-  Color(0xFF5A6658),
-];
 
 class MobileFlashcardsScreen extends StatefulWidget {
   final int initialNavIndex;
@@ -49,10 +40,12 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
   late Animation<double> _overlayAnim;
   CardSwiperController? _swiperCtrl;
 
-  // Flip state for the currently displayed note
+  // Cover-card flip animation (plays once when user taps the subject cover)
   late AnimationController _flipCtrl;
   late Animation<double> _flipAnim;
-  bool _isFlipped = false;
+
+  // false = showing cover (subject name); true = in study mode (swipe notes)
+  bool _deckOpened = false;
 
   @override
   void initState() {
@@ -122,7 +115,7 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
   void _openSubject(String subject) {
     setState(() {
       _focusedSubject = subject;
-      _isFlipped = false;
+      _deckOpened = false; // always start from cover
       _swiperCtrl?.dispose();
       _swiperCtrl = CardSwiperController();
     });
@@ -135,18 +128,20 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
     if (mounted) {
       setState(() {
         _focusedSubject = null;
-        _isFlipped = false;
+        _deckOpened = false;
       });
     }
   }
 
   void _toggleFlip() {
-    if (_isFlipped) {
-      _flipCtrl.reverse();
-    } else {
-      _flipCtrl.forward();
-    }
-    setState(() => _isFlipped = !_isFlipped);
+    if (_deckOpened) return; // already in study mode
+    // Flip the cover card forward, then switch to study mode once hidden
+    _flipCtrl.forward().then((_) {
+      if (mounted) {
+        setState(() => _deckOpened = true);
+        _flipCtrl.reset(); // tidy up for next open
+      }
+    });
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -193,30 +188,10 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
   }
 
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 24, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Study Cards',
-            style: TextStyle(
-              color: AppTheme.primaryColor.withValues(alpha: 0.9),
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Tap a subject to study',
-            style:
-                TextStyle(color: AppTheme.descriptionTextColor, fontSize: 14),
-          ),
-        ],
-      ),
-    );
+    return const SizedBox(height: 20);
   }
+
+
 
   // ── Body states ────────────────────────────────────────────────────────────
 
@@ -282,7 +257,6 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
     final padding = const EdgeInsets.symmetric(horizontal: 18);
 
     int i = 0;
-    int accentIdx = 0;
     while (i < subjects.length) {
       final remaining = subjects.length - i;
       if (remaining == 1) {
@@ -291,13 +265,11 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
             padding: padding,
             child: _buildBentoTile(
               subject: subjects[i],
-              accent: _kAccents[accentIdx % _kAccents.length],
               fullWidth: true,
             ),
           ),
         );
         i++;
-        accentIdx++;
       } else {
         rows.add(
           Padding(
@@ -308,7 +280,6 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
                 Expanded(
                   child: _buildBentoTile(
                     subject: subjects[i],
-                    accent: _kAccents[accentIdx % _kAccents.length],
                     fullWidth: false,
                   ),
                 ),
@@ -316,7 +287,6 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
                 Expanded(
                   child: _buildBentoTile(
                     subject: subjects[i + 1],
-                    accent: _kAccents[(accentIdx + 1) % _kAccents.length],
                     fullWidth: false,
                   ),
                 ),
@@ -325,7 +295,6 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
           ),
         );
         i += 2;
-        accentIdx += 2;
       }
       rows.add(const SizedBox(height: 14));
     }
@@ -362,12 +331,11 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
 
   Widget _buildBentoTile({
     required String subject,
-    required Color accent,
     required bool fullWidth,
   }) {
     final notes = _grouped[subject] ?? [];
     final count = notes.length;
-    final tileHeight = fullWidth ? 148.0 : 165.0;
+    final tileHeight = fullWidth ? 138.0 : 158.0;
 
     return GestureDetector(
       onTap: () => _openSubject(subject),
@@ -375,10 +343,10 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
         height: tileHeight,
         decoration: BoxDecoration(
           color: AppTheme.backgroundColor,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.13),
+              color: Colors.black.withValues(alpha: 0.12),
               offset: const Offset(5, 6),
               blurRadius: 14,
               spreadRadius: -2,
@@ -392,73 +360,116 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(20),
           child: Stack(
             children: [
-              // Decorative blob top-right
+              // Soft decorative circle — top right
               Positioned(
-                top: -30,
-                right: -30,
+                top: -22,
+                right: -22,
                 child: Container(
-                  width: 110,
-                  height: 110,
+                  width: 88,
+                  height: 88,
                   decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.11),
+                    color: AppTheme.primaryColor.withValues(alpha: 0.06),
                     shape: BoxShape.circle,
                   ),
                 ),
               ),
-              // Bottom accent strip
+              // Left accent bar
               Positioned(
-                bottom: 0,
                 left: 0,
-                right: 0,
+                top: 18,
+                bottom: 18,
                 child: Container(
-                  height: 4,
-                  color: accent.withValues(alpha: 0.5),
+                  width: 3,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.45),
+                    borderRadius: const BorderRadius.horizontal(
+                      right: Radius.circular(3),
+                    ),
+                  ),
                 ),
               ),
-              // Content
+              // Main content
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 20, 14, 20),
+                padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(Icons.style_rounded, color: accent, size: 20),
+                    // ── Top row: icon + count pill ──────────────────────────
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor
+                                .withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.menu_book_rounded,
+                            color: AppTheme.primaryColor
+                                .withValues(alpha: 0.80),
+                            size: 17,
+                          ),
+                        ),
+                        const Spacer(),
+                        // Count pill
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor
+                                .withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '$count',
+                            style: TextStyle(
+                              color: AppTheme.primaryColor
+                                  .withValues(alpha: 0.85),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
+                    const Spacer(),
+                    // ── Subject name ─────────────────────────────────────────
                     Text(
                       subject,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: AppTheme.textColor,
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight: FontWeight.w800,
-                        height: 1.2,
+                        height: 1.25,
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(height: 7),
+                    // ── Bottom row: note count label + arrow ─────────────────
                     Row(
                       children: [
                         Text(
-                          '$count card${count == 1 ? '' : 's'}',
+                          '$count note${count == 1 ? '' : 's'}',
                           style: TextStyle(
                             color: AppTheme.descriptionTextColor
-                                .withValues(alpha: 0.7),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                                .withValues(alpha: 0.55),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                         const Spacer(),
-                        Icon(Icons.touch_app_rounded,
-                            color: accent.withValues(alpha: 0.55), size: 16),
+                        Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 11,
+                          color: AppTheme.primaryColor
+                              .withValues(alpha: 0.40),
+                        ),
                       ],
                     ),
                   ],
@@ -483,10 +494,8 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
         child: child,
       ),
       child: GestureDetector(
-        // Tapping the dim area (outside the swiper) dismisses
-        onTap: _closeSubject,
+        onTap: _closeSubject, // tap dim area to dismiss
         child: Container(
-          // ── Light frosted overlay instead of dark ──
           color: AppTheme.backgroundColor.withValues(alpha: 0.82),
           child: SafeArea(
             bottom: false,
@@ -494,69 +503,88 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
               children: [
                 const SizedBox(height: 24),
 
-                // Subtle instruction badge
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.touch_app_rounded,
+                // Hint badge — changes once deck is opened
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: Container(
+                    key: ValueKey(_deckOpened),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _deckOpened
+                              ? Icons.swipe_rounded
+                              : Icons.touch_app_rounded,
                           size: 14,
-                          color: AppTheme.primaryColor.withValues(alpha: 0.6)),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Tap card to flip  •  Swipe to navigate',
-                        style: TextStyle(
-                          color: AppTheme.descriptionTextColor
-                              .withValues(alpha: 0.7),
-                          fontSize: 11.5,
-                          letterSpacing: 0.3,
+                          color:
+                              AppTheme.primaryColor.withValues(alpha: 0.6),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        Text(
+                          _deckOpened
+                              ? 'Swipe to navigate notes'
+                              : 'Tap card to start studying',
+                          style: TextStyle(
+                            color: AppTheme.descriptionTextColor
+                                .withValues(alpha: 0.7),
+                            fontSize: 11.5,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
 
                 const SizedBox(height: 12),
 
-                // Card swiper - intercept taps so they don't dismiss overlay
+                // Card swiper area — absorb taps so they don’t dismiss overlay
                 Expanded(
-                    child: GestureDetector(
-                  onTap: () {}, // absorb taps within swiper area
-                  child: notes.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No cards yet.',
-                            style: TextStyle(
-                              color: AppTheme.descriptionTextColor,
-                              fontSize: 16,
+                  child: GestureDetector(
+                    onTap: () {}, // absorb taps within swiper area
+                    child: notes.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No cards yet.',
+                              style: TextStyle(
+                                color: AppTheme.descriptionTextColor,
+                                fontSize: 16,
+                              ),
                             ),
+                          )
+                        : CardSwiper(
+                            controller: _swiperCtrl!,
+                            cardsCount: notes.length,
+                            isLoop: notes.length > 1,
+                            numberOfCardsDisplayed:
+                                notes.length == 1 ? 1 : 2,
+                            backCardOffset: const Offset(0, 28),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 8),
+                            onSwipe: (prev, curr, dir) {
+                              // Block swiping until the cover has been flipped
+                              if (!_deckOpened) return false;
+                              return true;
+                            },
+                            cardBuilder: (ctx, index, pX, pY) {
+                              if (!_deckOpened) {
+                                // All slots show the same cover card;
+                                // swiping is blocked so index is always 0.
+                                return _buildFocusedFlipCard(
+                                    notes[index.clamp(0, notes.length - 1)]);
+                              }
+                              // Study mode: each card shows its note content
+                              return _buildNoteCard(notes[index]);
+                            },
                           ),
-                        )
-                      : CardSwiper(
-                          controller: _swiperCtrl!,
-                          cardsCount: notes.length,
-                          isLoop: notes.length > 1,
-                          numberOfCardsDisplayed: notes.length == 1 ? 1 : 2,
-                          backCardOffset: const Offset(0, 28),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 8),
-                          onSwipe: (prev, curr, dir) {
-                            if (_isFlipped) {
-                              _flipCtrl.reset();
-                              setState(() => _isFlipped = false);
-                            }
-                            return true;
-                          },
-                          cardBuilder: (ctx, index, pX, pY) =>
-                              _buildFocusedFlipCard(notes[index]),
-                        ),
-                )),
+                  ),
+                ),
 
                 const SizedBox(height: 100),
               ],
@@ -653,55 +681,68 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
     );
   }
 
+  /// Cover card FRONT — shows only the subject name.
+  /// Shown before the deck is opened (before first flip).
   Widget _buildFront(StudyNote note) {
+    final notes = _grouped[_focusedSubject ?? ''] ?? [];
+    final count = notes.length;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 58,
-            height: 58,
+            width: 64,
+            height: 64,
             decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withValues(alpha: 0.1),
+              color: AppTheme.primaryColor.withValues(alpha: 0.10),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.style_rounded,
-                color: AppTheme.primaryColor, size: 28),
+            child: const Icon(Icons.menu_book_rounded,
+                color: AppTheme.primaryColor, size: 30),
           ),
           const SizedBox(height: 20),
           Text(
-            note.parentTopic.toUpperCase(),
+            'STUDY DECK',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: AppTheme.descriptionTextColor.withValues(alpha: 0.6),
-              fontSize: 11,
+              color: AppTheme.primaryColor.withValues(alpha: 0.55),
+              fontSize: 10.5,
               fontWeight: FontWeight.bold,
-              letterSpacing: 1.8,
+              letterSpacing: 2.2,
             ),
           ),
           const SizedBox(height: 10),
           Text(
-            note.topicTitle,
+            note.parentTopic,
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: AppTheme.textColor,
-              fontSize: 22,
+              fontSize: 24,
               fontWeight: FontWeight.w800,
               height: 1.2,
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 10),
+          Text(
+            '$count note${count == 1 ? '' : 's'}',
+            style: TextStyle(
+              color: AppTheme.descriptionTextColor.withValues(alpha: 0.55),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 32),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 Icons.touch_app_rounded,
-                color: AppTheme.descriptionTextColor.withValues(alpha: 0.45),
+                color: AppTheme.descriptionTextColor.withValues(alpha: 0.4),
                 size: 15,
               ),
               const SizedBox(width: 6),
               Text(
-                'Tap to flip',
+                'Tap to start studying',
                 style: TextStyle(
                   color: AppTheme.descriptionTextColor.withValues(alpha: 0.5),
                   fontSize: 12.5,
@@ -763,6 +804,119 @@ class _MobileFlashcardsScreenState extends State<MobileFlashcardsScreen>
           ],
         ),
       ],
+    );
+  }
+
+  // ── Note card (study mode) — shown after deck is opened ——————————————
+
+  Widget _buildNoteCard(StudyNote note) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundColor,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.16),
+            offset: const Offset(0, 14),
+            blurRadius: 28,
+          ),
+          const BoxShadow(
+            color: AppTheme.buttonHighlightColor,
+            offset: Offset(-4, -4),
+            blurRadius: 16,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: Stack(
+          children: [
+            // Top accent strip (primary green)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                height: 4,
+                color: AppTheme.primaryColor.withValues(alpha: 0.5),
+              ),
+            ),
+            // Subtle border
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(
+                    color: AppTheme.descriptionTextColor.withValues(alpha: 0.08),
+                    width: 1,
+                  ),
+                ),
+              ),
+            ),
+            // Note content
+            Padding(
+              padding: const EdgeInsets.all(28),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Subject breadcrumb
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        note.parentTopic.toUpperCase(),
+                        style: TextStyle(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.7),
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.8,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Note title
+                    Text(
+                      note.topicTitle,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppTheme.textColor,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                    // Swipe hint
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.swipe_rounded,
+                            color: AppTheme.descriptionTextColor
+                                .withValues(alpha: 0.38),
+                            size: 15),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Swipe for next',
+                          style: TextStyle(
+                            color: AppTheme.descriptionTextColor
+                                .withValues(alpha: 0.42),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

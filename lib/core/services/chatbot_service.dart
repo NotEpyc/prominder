@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Result types
@@ -221,52 +222,24 @@ class ChatbotService {
       return response;
     }
 
-    // Got a 401 Unauthorized — attempt to refresh the token
-    final prefs = await SharedPreferences.getInstance();
-    final refreshToken = prefs.getString('refresh_token');
-
-    if (refreshToken == null || refreshToken.isEmpty) {
+    // Got a 401 — attempt to refresh the token via shared AuthService
+    final refreshed = await AuthService.refreshToken();
+    if (!refreshed) {
       throw const ChatbotException(
         'Session expired. Please log in again.',
         statusCode: 401,
       );
     }
 
-    // Call token refresh
-    final refreshResponse = await http
-        .post(
-          Uri.parse('$_baseUrl/api/auth/token/refresh/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'refresh': refreshToken}),
-        )
-        .timeout(_timeout);
-
-    if (refreshResponse.statusCode == 200) {
-      final data = jsonDecode(refreshResponse.body);
-      final newAccessToken = data['access'];
-      if (newAccessToken != null) {
-        await prefs.setString('access_token', newAccessToken);
-        if (data['refresh'] != null) {
-          await prefs.setString('refresh_token', data['refresh']);
-        }
-
-        // Retry original request with new token
-        headers = await _authHeaders(newAccessToken);
-        if (method == 'POST') {
-          return await http
-              .post(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
-              .timeout(_timeout);
-        } else {
-          return await http.get(uri, headers: headers).timeout(_timeout);
-        }
-      }
+    // Retry original request with the new token
+    headers = await _authHeaders();
+    if (method == 'POST') {
+      return await http
+          .post(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+          .timeout(_timeout);
+    } else {
+      return await http.get(uri, headers: headers).timeout(_timeout);
     }
-
-    // If refresh failed (e.g., refresh token expired)
-    throw const ChatbotException(
-      'Session expired. Please log in again.',
-      statusCode: 401,
-    );
   }
 
   // ── POST /api/chatbot/converse/ ───────────────────────────────────────────
@@ -349,35 +322,12 @@ class ChatbotService {
       var response = await doRequest(headers);
 
       if (response.statusCode == 401) {
-        final prefs = await SharedPreferences.getInstance();
-        final refreshToken = prefs.getString('refresh_token');
-
-        if (refreshToken == null || refreshToken.isEmpty) {
+        final refreshed = await AuthService.refreshToken();
+        if (!refreshed) {
           throw const ChatbotException('Session expired. Please log in again.', statusCode: 401);
         }
-
-        final refreshResp = await http.post(
-          Uri.parse('$_baseUrl/api/auth/token/refresh/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'refresh': refreshToken}),
-        ).timeout(_timeout);
-
-        if (refreshResp.statusCode == 200) {
-          final data = jsonDecode(refreshResp.body);
-          final newAccess = data['access'];
-          if (newAccess != null) {
-            await prefs.setString('access_token', newAccess);
-            if (data['refresh'] != null) {
-              await prefs.setString('refresh_token', data['refresh']);
-            }
-            headers = await _authHeaders(newAccess);
-            response = await doRequest(headers);
-          } else {
-            throw const ChatbotException('Session expired. Please log in again.', statusCode: 401);
-          }
-        } else {
-          throw const ChatbotException('Session expired. Please log in again.', statusCode: 401);
-        }
+        headers = await _authHeaders();
+        response = await doRequest(headers);
       }
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
